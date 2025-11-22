@@ -1,0 +1,5 @@
+{
+  "name": "Cavanon",
+  "description": "A highly customizable, offline-capable 2D grid RPG with deep NPC interactions, dynamic schedules, and strategic turn-based combat.",
+  "requestFramePermissions": []
+}
