@@ -1,54 +1,19 @@
 
-import React, { useReducer, useEffect, useCallback, useState, useRef, useMemo } from 'react';
+import React, { useReducer, useEffect, useState, useRef } from 'react';
 import WorldMap from './components/WorldMap';
-import { Panel, Button, StatBar, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface, SaveLoadModal } from './components/UIComponents';
+import { Panel, Button, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface, SaveLoadModal } from './components/UIComponents';
 import GameLog from './components/GameLog';
 import CombatView from './components/CombatView';
 import { 
-  GameState, GameMode, TileType, Weather, TimeOfDay, Player, LogEntry, NPC, EquipmentSlot, Item, Stats, BattleSpeed, Enemy, CombatState, InteractableType, QuestStatus, QuestType 
+  GameState, GameMode, TileType, Weather, TimeOfDay, Player, LogEntry, NPC, EquipmentSlot, Item, Stats, BattleSpeed, Enemy, CombatState, InteractableType, QuestStatus, QuestType, Action 
 } from './types';
 import { 
   BASE_STATS, WEATHER_ICONS, NPC_TEMPLATES, DIALOGUE_TREE, ITEMS, generateVillage, generateWorldMap, generatePlayerHome, generateCity
 } from './constants';
 import { 
-  calculateStats, formatTime, formatDate, generateLocationDescription, generateEnemy, resolveAutoTurn, calculateFleeChance, generateRandomQuest, generateProceduralItem, calculateTotalDays, generateShopInventory
+  calculateStats, formatTime, generateEnemy, resolveAutoTurn, calculateFleeChance, generateRandomQuest, calculateTotalDays, generateShopInventory, generateProceduralItem, addToInventory, removeFromInventory
 } from './utils';
-import { Settings, HelpCircle, Clock, Calendar, Map as MapIcon, Backpack, User, BookOpen, Save, Upload, Loader, Sparkles, Scroll, Heart, Zap } from 'lucide-react';
-
-// --- Actions ---
-
-type Action =
-  | { type: 'START_GAME'; payload: Partial<Player> }
-  | { type: 'SAVE_GAME'; payload: number }
-  | { type: 'LOAD_GAME'; payload: number }
-  | { type: 'SET_MODE'; payload: GameMode }
-  | { type: 'PLAYER_STEP'; payload: { x: number; y: number } } // Consolidated Action
-  | { type: 'SWITCH_MAP'; payload: { mapId: string; x: number; y: number } }
-  | { type: 'ADD_LOG'; payload: Omit<LogEntry, 'id' | 'timestamp'> }
-  | { type: 'START_INTERACTION'; payload: { npcId: string; dialogueId: string } }
-  | { type: 'UPDATE_GAME_STATE'; payload: { player?: Player; npcs?: NPC[] } }
-  | { type: 'END_INTERACTION' }
-  | { type: 'EQUIP_ITEM'; payload: Item }
-  | { type: 'UNEQUIP_ITEM'; payload: EquipmentSlot }
-  | { type: 'USE_ITEM'; payload: Item }
-  | { type: 'LEVEL_UP' }
-  | { type: 'ALLOCATE_STAT'; payload: keyof Stats }
-  | { type: 'INIT_COMBAT'; payload: { enemy: Enemy } }
-  | { type: 'START_COMBAT' }
-  | { type: 'ATTEMPT_FLEE' }
-  | { type: 'COMBAT_TICK' }
-  | { type: 'TOGGLE_COMBAT_SPEED' }
-  | { type: 'END_COMBAT'; payload: { victory: boolean } }
-  | { type: 'CLOSE_COMBAT' }
-  | { type: 'REST' }
-  | { type: 'STORAGE_DEPOSIT'; payload: Item }
-  | { type: 'STORAGE_WITHDRAW'; payload: Item }
-  | { type: 'GENERATE_QUEST' }
-  | { type: 'CLAIM_QUEST'; payload: string }
-  | { type: 'OPEN_SHOP'; payload: string }
-  | { type: 'RESTOCK_SHOP'; payload: string }
-  | { type: 'BUY_ITEM'; payload: Item }
-  | { type: 'SELL_ITEM'; payload: Item };
+import { Clock, Backpack, User, BookOpen, Save, HelpCircle, Heart, Zap, Scroll, Star, Settings, Sword, Map, Gamepad2, Skull, Crown } from 'lucide-react';
 
 // --- Initial State ---
 
@@ -86,7 +51,7 @@ const initialState: GameState = {
     skills: [],
     quests: [],
     completedQuestIds: [],
-    statusEffects: []
+    statusEffects: [{ id: 'blessing', type: 'REGEN', name: 'Blessing', duration: 20, value: 2 }]
   },
   npcs: NPC_TEMPLATES,
   currentMapId: 'starter_village',
@@ -115,6 +80,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const { derived: startDerived } = calculateStats(startPlayer as Player);
       startPlayer.hp = startDerived.maxHp;
       startPlayer.mp = startDerived.maxMp;
+      
+      // Ensure starter items stack properly
+      let stackedInv: Item[] = [];
+      startPlayer.inventory.forEach(item => {
+          stackedInv = addToInventory(stackedInv, item, item.quantity || 1);
+      });
+      startPlayer.inventory = stackedInv;
 
       return {
         ...state,
@@ -161,7 +133,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { 
         ...state, 
         mode: action.payload, 
-        // Improve previousMode tracking to handle Menu/Settings correctly
         previousMode: (state.mode === GameMode.EXPLORATION || state.mode === GameMode.MENU || state.mode === GameMode.SETTINGS) ? state.mode : state.previousMode 
       };
     case 'PLAYER_STEP': {
@@ -198,13 +169,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const newHp = Math.min(derived.maxHp, state.player.hp + hpRecovered);
       const newMp = Math.min(derived.maxMp, state.player.mp + mpRecovered);
 
-      // 4. Encounter Check
+      // 4. Encounter Check (Movement has very low chance)
       const tile = currentMap.tiles[y][x];
       let nextMode = state.mode;
       let nextCombat = state.combat;
       
       if ([TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS, TileType.WATER].includes(tile.type)) {
-           if (Math.random() < 0.05) { // 5% chance
+           if (Math.random() < 0.03) { // 3% chance on step
                const enemy = generateEnemy(tile.type, state.player.level);
                nextMode = GameMode.COMBAT;
                nextCombat = {
@@ -228,6 +199,103 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         mode: nextMode,
         combat: nextCombat
       };
+    }
+    case 'SEARCH_AREA': {
+        // 1. Time Updates (Searching takes 30 mins)
+        const addedMinutes = 30;
+        let { year, month, day, hour, minute } = state.date;
+        minute += addedMinutes;
+        while (minute >= 60) { minute -= 60; hour++; }
+        while (hour >= 24) { hour -= 24; day++; }
+        while (day > 30) { day -= 30; month++; }
+        while (month > 12) { month -= 12; year++; }
+
+        let timeOfDay = TimeOfDay.NIGHT;
+        if (hour >= 5 && hour < 9) timeOfDay = TimeOfDay.DAWN;
+        else if (hour >= 9 && hour < 18) timeOfDay = TimeOfDay.DAY;
+        else if (hour >= 18 && hour < 21) timeOfDay = TimeOfDay.DUSK;
+
+        // 2. Regeneration
+        const { derived } = calculateStats(state.player);
+        const hpRecovered = Math.max(0, (derived.hpRegen * (addedMinutes / 60)));
+        const mpRecovered = Math.max(0, (derived.mpRegen * (addedMinutes / 60)));
+        const newHp = Math.min(derived.maxHp, state.player.hp + hpRecovered);
+        const newMp = Math.min(derived.maxMp, state.player.mp + mpRecovered);
+
+        // 3. Search Outcome Logic
+        const roll = Math.random();
+        const currentMap = state.maps[state.currentMapId];
+        const tile = currentMap.tiles[state.player.position.y][state.player.position.x];
+        
+        let nextMode = state.mode;
+        let nextCombat = state.combat;
+        let newLogs = [...state.logs];
+        let newInventory = [...state.player.inventory];
+
+        // Can only find things in wild areas
+        const isWild = [TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS, TileType.WATER].includes(tile.type);
+
+        if (isWild) {
+            if (roll < 0.35) { 
+                // 35% Encounter
+                const enemy = generateEnemy(tile.type, state.player.level);
+                nextMode = GameMode.COMBAT;
+                nextCombat = {
+                    enemy,
+                    logs: [],
+                    turn: 1,
+                    speed: BattleSpeed.NORMAL,
+                    isVictory: null,
+                    playerCooldowns: {},
+                    isStarted: false
+               };
+            } else if (roll < 0.55) {
+                // 20% Find Item
+                const itemType = Math.random() > 0.5 ? 'CONSUMABLE' : 'MISC';
+                let foundItem;
+                if (itemType === 'CONSUMABLE') {
+                    foundItem = Math.random() > 0.5 ? ITEMS['POTION_HP'] : ITEMS['BREAD'];
+                } else {
+                    foundItem = generateProceduralItem(state.player.level, 'WEAPON'); // Occasional gear
+                    if (Math.random() > 0.1) foundItem = ITEMS['GIFT_FLOWER']; // Mostly trash/misc
+                }
+                
+                // Stack the item
+                newInventory = addToInventory(newInventory, foundItem, 1);
+
+                newLogs.push({
+                    id: Date.now().toString(),
+                    timestamp: `${hour}:${minute.toString().padStart(2,'0')}`,
+                    text: `You searched the area and found: ${foundItem.name}.`,
+                    type: 'INFO'
+                });
+            } else {
+                // Nothing
+                newLogs.push({
+                    id: Date.now().toString(),
+                    timestamp: `${hour}:${minute.toString().padStart(2,'0')}`,
+                    text: `You spent 30 minutes searching but found nothing of interest.`,
+                    type: 'NARRATIVE'
+                });
+            }
+        } else {
+            newLogs.push({
+                id: Date.now().toString(),
+                timestamp: `${hour}:${minute.toString().padStart(2,'0')}`,
+                text: `You look around the ${tile.type.toLowerCase()}, but there is nothing to find here.`,
+                type: 'NARRATIVE'
+            });
+        }
+
+        return {
+            ...state,
+            player: { ...state.player, hp: newHp, mp: newMp, inventory: newInventory },
+            date: { year, month, day, hour, minute },
+            timeOfDay,
+            mode: nextMode,
+            combat: nextCombat,
+            logs: newLogs
+        };
     }
     case 'SWITCH_MAP':
       return {
@@ -273,8 +341,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         if (!item.slot) return state;
         
         const oldItem = state.player.equipment[item.slot];
-        const newInventory = state.player.inventory.filter(i => i !== item);
-        if (oldItem) newInventory.push(oldItem);
+        
+        // Remove 1 count of new item from inventory
+        let newInventory = removeFromInventory(state.player.inventory, item, 1);
+        
+        // Add old item back to inventory
+        if (oldItem) {
+            newInventory = addToInventory(newInventory, oldItem, 1);
+        }
         
         return {
             ...state,
@@ -293,11 +367,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const item = state.player.equipment[slot];
         if (!item) return state;
 
+        const newInventory = addToInventory(state.player.inventory, item, 1);
+
         return {
             ...state,
             player: {
                 ...state.player,
-                inventory: [...state.player.inventory, item],
+                inventory: newInventory,
                 equipment: {
                     ...state.player.equipment,
                     [slot]: null
@@ -307,7 +383,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     }
     case 'USE_ITEM': {
         const item = action.payload;
-        const newInventory = state.player.inventory.filter(i => i !== item);
+        
+        // Remove 1 unit
+        const newInventory = removeFromInventory(state.player.inventory, item, 1);
+        
         let newHp = state.player.hp;
         let text = `Used ${item.name}.`;
         
@@ -402,19 +481,25 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     }
     case 'STORAGE_DEPOSIT': {
         const item = action.payload;
-        const newInv = state.player.inventory.filter(i => i !== item);
+        // Remove 1 from player
+        const newInv = removeFromInventory(state.player.inventory, item, 1);
+        // Add 1 to storage
+        const newStorage = addToInventory(state.storage, item, 1);
         return {
             ...state,
             player: { ...state.player, inventory: newInv },
-            storage: [...state.storage, item]
+            storage: newStorage
         };
     }
     case 'STORAGE_WITHDRAW': {
         const item = action.payload;
-        const newStorage = state.storage.filter(i => i !== item);
+        // Remove 1 from storage
+        const newStorage = removeFromInventory(state.storage, item, 1);
+        // Add 1 to player
+        const newInv = addToInventory(state.player.inventory, item, 1);
         return {
             ...state,
-            player: { ...state.player, inventory: [...state.player.inventory, item] },
+            player: { ...state.player, inventory: newInv },
             storage: newStorage
         };
     }
@@ -502,20 +587,25 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'BUY_ITEM': {
         const item = action.payload;
         if (state.player.gold < item.value) return state;
+        
+        // Add to inventory (handles stacks)
+        const newInv = addToInventory(state.player.inventory, item, 1);
 
         return {
             ...state,
             player: {
                 ...state.player,
                 gold: state.player.gold - item.value,
-                inventory: [...state.player.inventory, item]
+                inventory: newInv
             }
         };
     }
     case 'SELL_ITEM': {
         const item = action.payload;
         const sellPrice = Math.floor(item.value * 0.5);
-        const newInv = state.player.inventory.filter(i => i !== item);
+        
+        // Remove 1 from inventory
+        const newInv = removeFromInventory(state.player.inventory, item, 1);
 
         return {
             ...state,
@@ -640,7 +730,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             
             // Add Loot
             if (state.combat.loot) {
-                newInv = [...newInv, ...state.combat.loot];
+                state.combat.loot.forEach(item => {
+                    newInv = addToInventory(newInv, item, 1);
+                });
             }
             
             newLogs.push({ 
@@ -658,6 +750,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 }
                 return q;
             });
+            
+            // Level Up check is handled by the useEffect in the App component
 
         } else {
             newLogs.push({ 
@@ -697,6 +791,13 @@ const App = () => {
     }
     return () => clearInterval(interval);
   }, [state.mode, state.combat?.isStarted, state.combat?.isVictory, state.combat?.speed]);
+
+  // Level Up Check Effect
+  useEffect(() => {
+     if (state.player.exp >= state.player.maxExp) {
+         dispatch({ type: 'LEVEL_UP' });
+     }
+  }, [state.player.exp, state.player.maxExp]);
 
   // Input Handler
   useEffect(() => {
@@ -741,9 +842,11 @@ const App = () => {
                 // Interaction
                 const map = state.maps[state.currentMapId];
                 const tile = map.tiles[state.player.position.y][state.player.position.x];
-                
+                let foundInteraction = false;
+
                 // Interactable Objects
                 if (tile.interactable) {
+                    foundInteraction = true;
                     if (tile.interactable.type === InteractableType.BED) {
                         dispatch({ type: 'REST' });
                     }
@@ -753,21 +856,29 @@ const App = () => {
                 }
 
                 // NPCs
-                const checkOffsets = [[0,0], [0,-1], [0,1], [-1,0], [1,0]];
-                for (let [ox, oy] of checkOffsets) {
-                    const tx = state.player.position.x + ox;
-                    const ty = state.player.position.y + oy;
-                    if (tx >= 0 && tx < map.width && ty >= 0 && ty < map.height) {
-                        const t = map.tiles[ty][tx];
-                        if (t.npcs.length > 0) {
-                            const npcId = t.npcs[0]; // Just first one
-                            const npc = state.npcs.find(n => n.id === npcId);
-                            if (npc) {
-                                dispatch({ type: 'START_INTERACTION', payload: { npcId: npc.id, dialogueId: npc.dialogueRoot } });
-                                break;
+                if (!foundInteraction) {
+                    const checkOffsets = [[0,0], [0,-1], [0,1], [-1,0], [1,0]];
+                    for (let [ox, oy] of checkOffsets) {
+                        const tx = state.player.position.x + ox;
+                        const ty = state.player.position.y + oy;
+                        if (tx >= 0 && tx < map.width && ty >= 0 && ty < map.height) {
+                            const t = map.tiles[ty][tx];
+                            if (t.npcs.length > 0) {
+                                const npcId = t.npcs[0]; // Just first one
+                                const npc = state.npcs.find(n => n.id === npcId);
+                                if (npc) {
+                                    dispatch({ type: 'START_INTERACTION', payload: { npcId: npc.id, dialogueId: npc.dialogueRoot } });
+                                    foundInteraction = true;
+                                    break;
+                                }
                             }
                         }
                     }
+                }
+
+                // If nothing specific, Search/Forage the area
+                if (!foundInteraction) {
+                    dispatch({ type: 'SEARCH_AREA' });
                 }
             }
 
@@ -786,14 +897,67 @@ const App = () => {
 
   if (state.mode === GameMode.MENU) {
       return (
-          <div className="h-full w-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 animate-pulse"></div>
-              <h1 className="pixel-font text-6xl text-amber-500 mb-8 drop-shadow-lg tracking-widest">CAVANON</h1>
-              <div className="space-y-4 z-10">
-                  <Button onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CREATION })} className="w-64 py-4 text-xl">New Game</Button>
-                  <Button onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })} variant="secondary" className="w-64 py-4 text-xl">Load Game</Button>
-                  <Button onClick={() => setShowBestiary(true)} variant="ghost" className="w-64">Bestiary</Button>
+          <div className="h-full w-full bg-slate-950 flex items-center justify-center relative overflow-hidden">
+              {/* Animated Background */}
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20 animate-pulse"></div>
+              <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 to-slate-950 z-0"></div>
+              
+              {/* Main Container */}
+              <div className="relative z-10 flex flex-col items-center gap-10 animate-in zoom-in duration-700">
+                  
+                  {/* Title Section */}
+                  <div className="text-center group">
+                      <div className="flex items-center justify-center gap-4 mb-2">
+                          <Sword size={40} className="text-amber-600 animate-bounce-slow" />
+                          <h1 className="pixel-font text-7xl text-amber-500 tracking-[0.2em] drop-shadow-[0_0_25px_rgba(245,158,11,0.4)] group-hover:scale-105 transition-transform duration-500">
+                              CAVANON
+                          </h1>
+                          <Sword size={40} className="text-amber-600 animate-bounce-slow rotate-180 scale-x-[-1]" />
+                      </div>
+                      <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-amber-700 to-transparent mb-2"></div>
+                      <p className="text-slate-500 font-serif italic tracking-widest text-sm">INFINITE GRID RPG</p>
+                  </div>
+
+                  {/* Menu Options */}
+                  <div className="flex flex-col gap-4 w-80">
+                      <button 
+                          onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CREATION })} 
+                          className="group relative bg-slate-900 border border-amber-900/50 hover:border-amber-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                      >
+                          <div className="absolute inset-0 bg-amber-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="flex items-center justify-between relative z-10">
+                              <span className="pixel-font text-lg text-amber-100 group-hover:text-amber-400 transition-colors">New Game</span>
+                              <Map className="text-slate-600 group-hover:text-amber-500" size={20} />
+                          </div>
+                      </button>
+
+                      <button 
+                          onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })} 
+                          className="group relative bg-slate-900 border border-slate-800 hover:border-cyan-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                      >
+                          <div className="absolute inset-0 bg-cyan-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="flex items-center justify-between relative z-10">
+                              <span className="pixel-font text-lg text-slate-300 group-hover:text-cyan-400 transition-colors">Load Game</span>
+                              <Save className="text-slate-600 group-hover:text-cyan-500" size={20} />
+                          </div>
+                      </button>
+
+                      <button 
+                          onClick={() => setShowBestiary(true)} 
+                          className="group relative bg-slate-900 border border-slate-800 hover:border-red-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                      >
+                          <div className="absolute inset-0 bg-red-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="flex items-center justify-between relative z-10">
+                              <span className="pixel-font text-lg text-slate-300 group-hover:text-red-400 transition-colors">Bestiary</span>
+                              <BookOpen className="text-slate-600 group-hover:text-red-500" size={20} />
+                          </div>
+                      </button>
+                  </div>
+                  
+                  {/* Footer */}
+                  <div className="text-slate-700 text-xs font-mono">v1.2.0 • Early Access Build</div>
               </div>
+
               {showBestiary && <BestiaryModal onClose={() => setShowBestiary(false)} />}
           </div>
       );
@@ -803,97 +967,120 @@ const App = () => {
       return <CharacterCreation onComplete={(p) => dispatch({ type: 'START_GAME', payload: p })} onCancel={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })} />;
   }
 
+  if (state.mode === GameMode.COMBAT && state.combat) {
+    return (
+        <CombatView 
+          combatState={state.combat} 
+          player={state.player}
+          onToggleSpeed={() => dispatch({ type: 'TOGGLE_COMBAT_SPEED' })}
+          onFleeAttempt={() => dispatch({ type: 'ATTEMPT_FLEE' })}
+          onStart={() => dispatch({ type: 'START_COMBAT' })}
+          onClose={() => dispatch({ type: 'CLOSE_COMBAT' })}
+        />
+    );
+  }
+
+  // Calculate stats for HUD
+  const { derived } = calculateStats(state.player);
+
   // Exploration & Other Modes Overlay
   const currentMap = state.maps[state.currentMapId];
   
   return (
-      <div className="h-full w-full bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col md:flex-row">
+      <div className="h-full w-full bg-slate-950 text-slate-200 font-sans overflow-hidden flex flex-col md:flex-row">
           
           {/* Left: Game World */}
-          <div className="flex-1 relative flex items-center justify-center bg-black/50">
-              <WorldMap mapData={currentMap} player={state.player} npcs={state.npcs} />
+          <div className="flex-1 relative flex items-center justify-center bg-black shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]">
+              
+              {/* World Map Frame */}
+              <div className="relative p-1 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
+                 <div className="absolute -inset-1 bg-gradient-to-br from-slate-800 to-slate-950 rounded-xl -z-10"></div>
+                 <WorldMap mapData={currentMap} player={state.player} npcs={state.npcs} />
+              </div>
               
               {/* Time/Weather Overlay (Detailed View) */}
-              <div className="absolute top-4 left-4 bg-slate-900/90 p-3 rounded border border-slate-700 shadow-lg backdrop-blur-sm flex flex-col gap-1 animate-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 text-amber-500 font-bold text-sm tracking-wider border-b border-slate-800 pb-1 mb-1">
-                        <span>Year {state.date.year}</span>
-                        <span className="text-slate-600">•</span>
-                        <span>Month {state.date.month}</span>
-                        <span className="text-slate-600">•</span>
-                        <span>Day {state.date.day}</span>
+              <div className="absolute top-4 left-4 bg-slate-900/90 p-3 rounded-lg border border-slate-700 shadow-xl backdrop-blur-sm flex flex-col gap-1 animate-in slide-in-from-top-2 z-10 min-w-[200px]">
+                  <div className="flex items-center justify-between gap-2 text-amber-500 font-bold text-xs tracking-wider border-b border-slate-800 pb-1 mb-1 uppercase">
+                        <span>Y{state.date.year} / M{state.date.month} / D{state.date.day}</span>
+                        <Clock size={12} />
                   </div>
-                  <div className="flex items-center justify-between gap-4 text-xs font-mono">
-                      <div className="flex items-center gap-2 text-slate-300">
-                          <Clock size={14} className={state.timeOfDay === TimeOfDay.NIGHT ? "text-blue-400" : "text-yellow-400"} />
-                          {formatTime(state.date)} <span className="text-slate-500 uppercase">({state.timeOfDay})</span>
+                  <div className="flex items-center justify-between gap-4 font-mono">
+                      <div className="flex items-center gap-2 text-slate-200 text-lg font-bold">
+                          {formatTime(state.date)} <span className="text-xs text-slate-500 font-normal relative top-0.5">{state.timeOfDay}</span>
                       </div>
-                      <div className="text-slate-400 flex items-center gap-2" title={state.weather}>
-                          {WEATHER_ICONS[state.weather]} {state.weather}
+                      <div className="text-slate-400 flex items-center gap-2 text-sm" title={state.weather}>
+                          {WEATHER_ICONS[state.weather]}
                       </div>
                   </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="absolute bottom-4 right-4 flex gap-2">
-                  <button onClick={() => setShowHelp(true)} className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white border border-slate-600 shadow-lg" title="Help"><HelpCircle size={20} /></button>
-                  <button onClick={() => setShowBestiary(true)} className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white border border-slate-600 shadow-lg" title="Bestiary"><BookOpen size={20} /></button>
-                  <button onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SAVE })} className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white border border-slate-600 shadow-lg" title="Save Game"><Save size={20} /></button>
-                  <button onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SETTINGS })} className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white border border-slate-600 shadow-lg" title="Settings"><Settings size={20} /></button>
               </div>
           </div>
 
           {/* Right: HUD */}
-          <div className="w-full md:w-96 bg-slate-950 border-l border-slate-800 flex flex-col">
+          <div className="w-full md:w-96 bg-slate-950 border-l border-slate-800 flex flex-col z-20 shadow-2xl">
               {/* Stats Panel */}
-              <div className="p-4 border-b border-slate-800 bg-slate-900">
-                  <div className="flex justify-between items-center mb-2">
-                      <h2 className="font-bold text-amber-500">{state.player.name}</h2>
-                      <span className="text-xs text-slate-500">Lvl {state.player.level} {state.player.race} {state.player.class}</span>
+              <div className="p-5 border-b border-slate-800 bg-slate-900/50">
+                  <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-800 rounded border border-slate-700 flex items-center justify-center text-amber-600">
+                              <User size={20} />
+                          </div>
+                          <div>
+                              <h2 className="font-bold text-amber-500 text-lg leading-none">{state.player.name}</h2>
+                              <span className="text-xs text-slate-500 font-mono">Lvl {state.player.level} {state.player.race} {state.player.class}</span>
+                          </div>
+                      </div>
                   </div>
                   
-                  <div className="space-y-2">
-                       <div className="flex items-center gap-2">
-                          <Heart size={12} className="text-red-500" />
-                          <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div className="h-full bg-red-600" style={{ width: `${(state.player.hp / state.player.baseStats.constitution /* approx max */) * 100}%` }}></div> 
-                              {/* Note: using simplified max calc for UI here, or invoke calculateStats */}
+                  <div className="space-y-3 bg-slate-950 p-3 rounded border border-slate-800 shadow-inner">
+                       <div className="flex items-center gap-2" title="Health Points">
+                          <Heart size={14} className="text-red-500 shrink-0" />
+                          <div className="flex-1 h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                              <div className="h-full bg-gradient-to-r from-red-700 to-red-500" style={{ width: `${(state.player.hp / derived.maxHp) * 100}%` }}></div> 
                           </div>
-                          <span className="text-xs font-mono w-16 text-right">{Math.ceil(state.player.hp)}</span>
+                          <span className="text-xs font-mono w-16 text-right font-bold text-slate-300">{Math.ceil(state.player.hp)}</span>
                        </div>
-                       <div className="flex items-center gap-2">
-                          <Zap size={12} className="text-blue-500" />
-                          <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-600" style={{ width: `${(state.player.mp / 20) * 100}%` }}></div>
+                       <div className="flex items-center gap-2" title="Mana Points">
+                          <Zap size={14} className="text-blue-500 shrink-0" />
+                          <div className="flex-1 h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                              <div className="h-full bg-gradient-to-r from-blue-700 to-blue-500" style={{ width: `${(state.player.mp / derived.maxMp) * 100}%` }}></div>
                           </div>
-                          <span className="text-xs font-mono w-16 text-right">{Math.ceil(state.player.mp)}</span>
+                          <span className="text-xs font-mono w-16 text-right font-bold text-slate-300">{Math.ceil(state.player.mp)}</span>
+                       </div>
+                       <div className="flex items-center gap-2" title="Experience">
+                          <Star size={14} className="text-yellow-500 shrink-0" />
+                          <div className="flex-1 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                              <div className="h-full bg-yellow-600" style={{ width: `${(state.player.exp / state.player.maxExp) * 100}%` }}></div>
+                          </div>
+                          <span className="text-[10px] font-mono w-16 text-right text-slate-500">{Math.floor((state.player.exp/state.player.maxExp)*100)}%</span>
                        </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                      <Button variant="secondary" className="py-1 px-1" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.INVENTORY })}><Backpack size={16}/></Button>
-                      <Button variant="secondary" className="py-1 px-1" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CHARACTER })}><User size={16}/></Button>
-                      <Button variant="secondary" className="py-1 px-1" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.QUESTS })}><Scroll size={16}/></Button>
-                      <Button variant="secondary" className="py-1 px-1" onClick={() => setShowBestiary(true)}><BookOpen size={16}/></Button>
+
+                  {/* Quick Actions Grid */}
+                  <div className="mt-4 grid grid-cols-5 gap-2">
+                      <Button title="Inventory [I]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.INVENTORY })}><Backpack size={18}/></Button>
+                      <Button title="Character [C]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CHARACTER })}><Crown size={18}/></Button>
+                      <Button title="Quests [Q]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.QUESTS })}><Scroll size={18}/></Button>
+                      <Button title="Save Game" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SAVE })}><Save size={18}/></Button>
+                      <Button title="Settings [ESC]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SETTINGS })}><Settings size={18}/></Button>
                   </div>
               </div>
 
               {/* Game Log */}
-              <div className="flex-1 overflow-hidden bg-slate-950">
+              <div className="flex-1 overflow-hidden bg-slate-950 relative">
+                  <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-b from-slate-950 to-transparent z-10 pointer-events-none"></div>
                   <GameLog logs={state.logs} isLoading={false} />
+                  <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-slate-950 to-transparent z-10 pointer-events-none"></div>
+              </div>
+              
+              {/* Interaction Prompt Bar */}
+              <div className="p-2 bg-slate-900 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between px-4 font-mono">
+                 <span>WASD to Move</span>
+                 <span>E to Interact/Search</span>
               </div>
           </div>
 
           {/* Modals */}
-          {state.mode === GameMode.COMBAT && state.combat && (
-              <CombatView 
-                combatState={state.combat} 
-                player={state.player}
-                onToggleSpeed={() => dispatch({ type: 'TOGGLE_COMBAT_SPEED' })}
-                onFleeAttempt={() => dispatch({ type: 'ATTEMPT_FLEE' })}
-                onStart={() => dispatch({ type: 'START_COMBAT' })}
-                onClose={() => dispatch({ type: 'CLOSE_COMBAT' })}
-              />
-          )}
-
+          
           {state.mode === GameMode.INVENTORY && (
               <InventoryModal 
                   player={state.player}
@@ -978,6 +1165,37 @@ const App = () => {
                       disabled: opt.requirement ? !opt.requirement(state.player, state.npcs.find(n => n.id === state.activeInteraction!.npcId)!) : false,
                       onClick: () => {
                           const npc = state.npcs.find(n => n.id === state.activeInteraction!.npcId)!;
+                          
                           if (opt.effect) {
                               opt.effect(state.player, npc);
-                              dispatch({ type: 'UPDATE_GAME_
+                              dispatch({ type: 'UPDATE_GAME_STATE', payload: { player: { ...state.player }, npcs: [...state.npcs] } });
+                          }
+
+                          if (opt.action === 'OPEN_SHOP') {
+                              dispatch({ type: 'OPEN_SHOP', payload: npc.id });
+                          } else if (opt.action === 'GENERATE_QUEST') {
+                              dispatch({ type: 'GENERATE_QUEST' });
+                              // Close interaction after generating quest usually, or go to next text
+                              if (opt.nextId) dispatch({ type: 'START_INTERACTION', payload: { npcId: npc.id, dialogueId: opt.nextId } });
+                              else dispatch({ type: 'END_INTERACTION' });
+                          } else if (opt.action === 'REST') {
+                               dispatch({ type: 'REST' });
+                               dispatch({ type: 'END_INTERACTION' });
+                          } else if (opt.nextId) {
+                              dispatch({ type: 'START_INTERACTION', payload: { npcId: npc.id, dialogueId: opt.nextId } });
+                          } else {
+                              dispatch({ type: 'END_INTERACTION' });
+                          }
+                      }
+                  }))}
+                  onClose={() => dispatch({ type: 'END_INTERACTION' })}
+              />
+          )}
+          
+          {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+          {showBestiary && <BestiaryModal onClose={() => setShowBestiary(false)} />}
+      </div>
+  );
+};
+
+export default App;

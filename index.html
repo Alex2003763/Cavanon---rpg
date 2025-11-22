@@ -67,6 +67,44 @@
       .animate-shimmer {
         animation: shimmer 2s infinite;
       }
+
+      /* --- Combat Animations --- */
+      @keyframes shake {
+        0%, 100% { transform: translate3d(0, 0, 0); }
+        10%, 30%, 50%, 70%, 90% { transform: translate3d(-4px, 0, 0); }
+        20%, 40%, 60%, 80% { transform: translate3d(4px, 0, 0); }
+      }
+      
+      @keyframes hard-shake {
+        0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        10%, 30%, 50%, 70%, 90% { transform: translate3d(-8px, 4px, 0) rotate(-2deg); }
+        20%, 40%, 60%, 80% { transform: translate3d(8px, -4px, 0) rotate(2deg); }
+      }
+
+      @keyframes hit-flash {
+        0% { filter: brightness(1) sepia(0); transform: scale(1); }
+        50% { filter: brightness(2) sepia(1) hue-rotate(-50deg) saturate(5); transform: scale(0.95); }
+        100% { filter: brightness(1) sepia(0); transform: scale(1); }
+      }
+
+      @keyframes player-lunge {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+
+      @keyframes damage-overlay {
+        0% { opacity: 0; }
+        20% { opacity: 0.4; }
+        100% { opacity: 0; }
+      }
+
+      .anim-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+      .anim-hard-shake { animation: hard-shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+      .anim-hit { animation: hit-flash 0.3s linear; }
+      .anim-lunge { animation: player-lunge 0.2s ease-out; }
+      .anim-damage-overlay { animation: damage-overlay 0.5s ease-out; }
+      
     </style>
   <script type="importmap">
 {

@@ -115,6 +115,7 @@ export interface Item {
   damage?: number;
   rarity?: ItemRarity;
   material?: ItemMaterial;
+  quantity?: number; // Stacking support
 }
 
 export interface Skill {
@@ -318,3 +319,37 @@ export interface GameState {
   settings: GameSettings;
   activeShopNpcId?: string;
 }
+
+export type Action =
+  | { type: 'START_GAME'; payload: Partial<Player> }
+  | { type: 'SAVE_GAME'; payload: number }
+  | { type: 'LOAD_GAME'; payload: number }
+  | { type: 'SET_MODE'; payload: GameMode }
+  | { type: 'PLAYER_STEP'; payload: { x: number; y: number } }
+  | { type: 'SWITCH_MAP'; payload: { mapId: string; x: number; y: number } }
+  | { type: 'ADD_LOG'; payload: Omit<LogEntry, 'id' | 'timestamp'> }
+  | { type: 'START_INTERACTION'; payload: { npcId: string; dialogueId: string } }
+  | { type: 'UPDATE_GAME_STATE'; payload: { player?: Player; npcs?: NPC[] } }
+  | { type: 'END_INTERACTION' }
+  | { type: 'EQUIP_ITEM'; payload: Item }
+  | { type: 'UNEQUIP_ITEM'; payload: EquipmentSlot }
+  | { type: 'USE_ITEM'; payload: Item }
+  | { type: 'LEVEL_UP' }
+  | { type: 'ALLOCATE_STAT'; payload: keyof Stats }
+  | { type: 'INIT_COMBAT'; payload: { enemy: Enemy } }
+  | { type: 'START_COMBAT' }
+  | { type: 'ATTEMPT_FLEE' }
+  | { type: 'COMBAT_TICK' }
+  | { type: 'TOGGLE_COMBAT_SPEED' }
+  | { type: 'END_COMBAT'; payload: { victory: boolean } }
+  | { type: 'CLOSE_COMBAT' }
+  | { type: 'REST' }
+  | { type: 'STORAGE_DEPOSIT'; payload: Item }
+  | { type: 'STORAGE_WITHDRAW'; payload: Item }
+  | { type: 'GENERATE_QUEST' }
+  | { type: 'CLAIM_QUEST'; payload: string }
+  | { type: 'OPEN_SHOP'; payload: string }
+  | { type: 'RESTOCK_SHOP'; payload: string }
+  | { type: 'BUY_ITEM'; payload: Item }
+  | { type: 'SELL_ITEM'; payload: Item }
+  | { type: 'SEARCH_AREA' };

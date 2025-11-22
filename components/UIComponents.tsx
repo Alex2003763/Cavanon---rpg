@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity, GameState } from '../types';
 import { ITEMS, BASE_STATS, RACES, CLASSES, SKILLS, ENEMY_TEMPLATES, TILE_ICONS } from '../constants';
 import { calculateStats, formatDate, formatTime } from '../utils';
-import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity, RefreshCw, Disc, FileText, LogOut } from 'lucide-react';
+import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity, RefreshCw, Disc, FileText, LogOut, MousePointer2, Backpack } from 'lucide-react';
 
 // Helper for rarity styling
 const getRarityBorder = (rarity?: ItemRarity) => {
@@ -31,6 +31,7 @@ const getRarityText = (rarity?: ItemRarity) => {
 // --- Item Tooltip Helper ---
 const getItemTooltip = (item: Item): string => {
     let tooltip = `[${item.rarity || 'COMMON'}] ${item.name}`;
+    if (item.quantity && item.quantity > 1) tooltip += ` (x${item.quantity})`;
     tooltip += `\nType: ${item.type} ${item.material ? `(${item.material})` : ''}`;
     
     if (item.damage) tooltip += `\nDamage: ${item.damage}`;
@@ -151,6 +152,32 @@ const SlotIcon: React.FC<{ slot: EquipmentSlot }> = ({ slot }) => {
     }
 };
 
+const InventoryGridItem: React.FC<{ item: Item; isSelected: boolean; onClick: () => void }> = ({ item, isSelected, onClick }) => {
+    return (
+        <div 
+            onClick={onClick}
+            className={`
+                aspect-square relative border-2 rounded cursor-pointer transition-all group
+                flex items-center justify-center
+                ${isSelected ? 'border-white bg-slate-800 shadow-lg scale-105 z-10' : `${getRarityBorder(item.rarity)} bg-slate-900 hover:border-slate-400 hover:bg-slate-800`}
+            `}
+            title={item.name}
+        >
+            {/* Item Icon */}
+            <div className={`${item.type === 'WEAPON' ? 'text-red-400' : item.type === 'ARMOR' ? 'text-blue-400' : item.type === 'CONSUMABLE' ? 'text-green-400' : 'text-slate-400'}`}>
+                {item.type === 'WEAPON' ? <Sword size={24} /> : item.type === 'ARMOR' ? <Shield size={24} /> : item.type === 'CONSUMABLE' ? <Package size={24} /> : <Star size={24} />}
+            </div>
+            
+            {/* Quantity Badge */}
+            {(item.quantity || 1) > 1 && (
+                <div className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] font-mono font-bold px-1 rounded border border-slate-700">
+                    {item.quantity}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const InventoryModal: React.FC<{ 
     player: Player; 
     onEquip: (item: Item) => void;
@@ -158,20 +185,22 @@ export const InventoryModal: React.FC<{
     onUse: (item: Item) => void;
     onClose: () => void;
 }> = ({ player, onEquip, onUnequip, onUse, onClose }) => {
+    const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-slate-900 border border-slate-600 w-full max-w-4xl rounded-lg shadow-2xl flex flex-col md:flex-row h-[600px] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-slate-950 border border-slate-600 w-full max-w-5xl rounded-xl shadow-2xl flex flex-col md:flex-row h-[80vh] overflow-hidden">
                 
                 {/* Left: Equipment Paper Doll */}
                 <div className="w-full md:w-1/3 bg-slate-950 p-6 border-r border-slate-800 flex flex-col items-center">
-                    <h3 className="pixel-font text-amber-500 mb-6">Equipment</h3>
+                    <h3 className="pixel-font text-amber-500 mb-6 flex items-center gap-2"><User size={18}/> Equipment</h3>
                     <div className="grid grid-cols-2 gap-4 w-full max-w-[200px]">
                         {[EquipmentSlot.HEAD, EquipmentSlot.ACCESSORY, EquipmentSlot.BODY, EquipmentSlot.OFF_HAND, EquipmentSlot.MAIN_HAND, EquipmentSlot.LEGS, EquipmentSlot.FEET].map(slot => {
                             const item = player.equipment[slot as EquipmentSlot];
                             return (
                                 <div key={slot} className={`
-                                    aspect-square rounded border-2 flex flex-col items-center justify-center p-2 relative group cursor-pointer transition-colors
-                                    ${item ? getRarityBorder(item.rarity) + ' bg-slate-900/50' : 'border-slate-800 bg-slate-900 hover:border-slate-600'}
+                                    aspect-square rounded border-2 flex flex-col items-center justify-center p-2 relative group cursor-pointer transition-colors shadow-inner
+                                    ${item ? getRarityBorder(item.rarity) + ' bg-slate-900' : 'border-slate-800 bg-slate-950 hover:border-slate-700'}
                                 `}
                                 onClick={() => item && onUnequip(slot as EquipmentSlot)}
                                 title={item ? getItemTooltip(item) : `Empty ${slot}`}
@@ -179,7 +208,7 @@ export const InventoryModal: React.FC<{
                                     <div className={`text-slate-500 mb-1 ${item ? getRarityText(item.rarity) : ''}`}><SlotIcon slot={slot as EquipmentSlot} /></div>
                                     <div className="text-[8px] text-center uppercase tracking-wider text-slate-500">{slot.replace('_', ' ')}</div>
                                     {item && (
-                                        <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-red-400 font-bold">
+                                        <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-red-400 font-bold transition-opacity">
                                             UNEQUIP
                                         </div>
                                     )}
@@ -189,48 +218,90 @@ export const InventoryModal: React.FC<{
                     </div>
                     
                     {/* Stats Summary */}
-                    <div className="mt-8 w-full space-y-2 text-xs font-mono text-slate-400">
-                        <div className="flex justify-between border-b border-slate-800 pb-1"><span>Phys Def</span> <span className="text-slate-200">{player.level * 2 + (player.baseStats.constitution / 2)}</span></div>
-                        <div className="flex justify-between border-b border-slate-800 pb-1"><span>Mag Def</span> <span className="text-slate-200">{player.level + (player.baseStats.intelligence / 2)}</span></div>
+                    <div className="mt-auto w-full space-y-2 text-xs font-mono text-slate-400 bg-slate-900 p-4 rounded border border-slate-800">
+                        <div className="flex justify-between border-b border-slate-800 pb-1"><span>Phys Def</span> <span className="text-slate-200">{Math.floor(player.level * 2 + (player.baseStats.constitution / 2))}</span></div>
+                        <div className="flex justify-between border-b border-slate-800 pb-1"><span>Mag Def</span> <span className="text-slate-200">{Math.floor(player.level + (player.baseStats.intelligence / 2))}</span></div>
                         <div className="flex justify-between border-b border-slate-800 pb-1"><span>Speed</span> <span className="text-slate-200">{player.baseStats.speed}</span></div>
                     </div>
                 </div>
 
-                {/* Right: Inventory List */}
-                <div className="flex-1 flex flex-col bg-slate-900">
-                    <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-                        <h3 className="pixel-font text-slate-200">Inventory <span className="text-slate-500 text-sm">({player.inventory.length} items)</span></h3>
-                        <button onClick={onClose} className="text-slate-500 hover:text-white"><X /></button>
+                {/* Right: Inventory Grid & Details */}
+                <div className="flex-1 flex flex-col bg-slate-900 relative">
+                    {/* Header */}
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                        <h3 className="pixel-font text-slate-200 flex items-center gap-2"><Backpack size={18}/> Inventory</h3>
+                        <div className="flex items-center gap-4 text-xs text-slate-500 font-mono">
+                            <span>{player.inventory.length} Slots Used</span>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded bg-slate-800"><X size={16} /></button>
+                        </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    
+                    {/* Grid Area */}
+                    <div className="flex-1 overflow-y-auto p-6 bg-slate-900/50">
                         {player.inventory.length === 0 ? (
-                            <div className="text-center text-slate-600 italic mt-10">Your backpack is empty.</div>
-                        ) : player.inventory.map((item, idx) => (
-                            <div key={`${item.id}-${idx}`} title={getItemTooltip(item)} className={`flex items-center justify-between p-3 bg-slate-950 rounded border ${getRarityBorder(item.rarity)} hover:bg-slate-800 transition-colors group cursor-help`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded flex items-center justify-center border ${item.type === 'WEAPON' ? 'border-red-900 bg-red-900/10 text-red-400' : item.type === 'ARMOR' ? 'border-blue-900 bg-blue-900/10 text-blue-400' : 'border-slate-700 bg-slate-800 text-slate-400'}`}>
-                                        {item.type === 'WEAPON' ? <Sword size={14} /> : item.type === 'ARMOR' ? <Shield size={14} /> : <div className="text-[10px] font-bold">ITM</div>}
-                                    </div>
-                                    <div>
-                                        <div className={`text-sm font-bold ${getRarityText(item.rarity)}`}>{item.name}</div>
-                                        <div className="text-xs text-slate-500">{item.type} {item.material ? `• ${item.material}` : ''}</div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {item.type === 'CONSUMABLE' && (
-                                        <Button variant="primary" onClick={() => onUse(item)} className="text-[10px] py-1 px-2">Use</Button>
-                                    )}
-                                    {(item.type === 'WEAPON' || item.type === 'ARMOR') && (
-                                        <Button variant="secondary" onClick={() => onEquip(item)} className="text-[10px] py-1 px-2">Equip</Button>
-                                    )}
-                                    <button className="text-red-900 hover:text-red-500 p-1"><Trash2 size={16} /></button>
-                                </div>
+                            <div className="text-center text-slate-600 italic mt-20">Your backpack is empty.</div>
+                        ) : (
+                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                                {player.inventory.map((item, idx) => (
+                                    <InventoryGridItem 
+                                        key={`${item.id}-${idx}`} 
+                                        item={item} 
+                                        isSelected={selectedItem === item}
+                                        onClick={() => setSelectedItem(item)}
+                                    />
+                                ))}
+                                {/* Empty slots visual filler (optional) */}
+                                {Array.from({ length: Math.max(0, 24 - player.inventory.length) }).map((_, i) => (
+                                    <div key={`empty-${i}`} className="aspect-square border border-slate-800/50 rounded bg-slate-950/30"></div>
+                                ))}
                             </div>
-                        ))}
+                        )}
                     </div>
-                    <div className="p-4 border-t border-slate-800 bg-slate-950 text-xs text-slate-500 flex justify-between">
-                        <span>Gold: <span className="text-yellow-500">{player.gold}</span></span>
-                        <span>Weight: N/A</span>
+
+                    {/* Item Details Pane (Bottom) */}
+                    <div className="h-48 bg-slate-950 border-t border-slate-800 p-4 flex gap-6 shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+                        {selectedItem ? (
+                            <>
+                                <div className={`w-24 h-24 shrink-0 border-2 rounded-lg flex items-center justify-center bg-slate-900 ${getRarityBorder(selectedItem.rarity)}`}>
+                                     {selectedItem.type === 'WEAPON' ? <Sword size={40} className={getRarityText(selectedItem.rarity)} /> : 
+                                      selectedItem.type === 'ARMOR' ? <Shield size={40} className={getRarityText(selectedItem.rarity)} /> : 
+                                      selectedItem.type === 'CONSUMABLE' ? <Package size={40} className={getRarityText(selectedItem.rarity)} /> : <Star size={40} className={getRarityText(selectedItem.rarity)} />}
+                                </div>
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className={`text-lg font-bold ${getRarityText(selectedItem.rarity)}`}>{selectedItem.name}</h4>
+                                            <div className="text-xs text-slate-500 uppercase tracking-widest font-bold">{selectedItem.type} • {selectedItem.material || 'Unknown'}</div>
+                                        </div>
+                                        <div className="text-xs text-amber-400 font-mono">{selectedItem.value}g</div>
+                                    </div>
+                                    <div className="text-sm text-slate-400 italic my-2 leading-tight">"{selectedItem.description}"</div>
+                                    
+                                    {/* Stats display */}
+                                    <div className="flex gap-3 text-xs font-mono text-slate-300 mb-auto">
+                                        {selectedItem.damage && <span>DMG: <span className="text-red-400">{selectedItem.damage}</span></span>}
+                                        {selectedItem.defense && <span>DEF: <span className="text-blue-400">{selectedItem.defense}</span></span>}
+                                        {selectedItem.stats && Object.entries(selectedItem.stats).map(([k,v]) => (
+                                            <span key={k}>{k.substring(0,3).toUpperCase()}: <span className="text-green-400">+{v}</span></span>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-3 mt-2">
+                                        {selectedItem.type === 'CONSUMABLE' && (
+                                            <Button variant="primary" onClick={() => { onUse(selectedItem); setSelectedItem(null); }} className="flex-1 py-1">Use Item</Button>
+                                        )}
+                                        {(selectedItem.type === 'WEAPON' || selectedItem.type === 'ARMOR') && (
+                                            <Button variant="success" onClick={() => { onEquip(selectedItem); setSelectedItem(null); }} className="flex-1 py-1">Equip</Button>
+                                        )}
+                                        <Button variant="danger" className="w-12 py-1"><Trash2 size={16} /></Button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex items-center justify-center w-full text-slate-600 italic gap-2">
+                                <MousePointer2 size={20} /> Select an item to view details
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -263,7 +334,9 @@ export const StorageModal: React.FC<{
                             {player.inventory.length === 0 && <div className="text-slate-600 text-center text-xs mt-4">Empty</div>}
                             {player.inventory.map((item, idx) => (
                                 <div key={`inv-${idx}`} onClick={() => onDeposit(item)} title={getItemTooltip(item)} className={`flex items-center justify-between p-2 bg-slate-950 border ${getRarityBorder(item.rarity)} rounded hover:bg-slate-900 cursor-pointer group transition-colors`}>
-                                    <span className={`text-sm ${getRarityText(item.rarity)}`}>{item.name}</span>
+                                    <span className={`text-sm ${getRarityText(item.rarity)}`}>
+                                        {item.name} {(item.quantity || 1) > 1 && <span className="text-slate-500 font-mono ml-1">x{item.quantity}</span>}
+                                    </span>
                                     <ArrowLeftRight size={14} className="text-slate-600 group-hover:text-amber-500" />
                                 </div>
                             ))}
@@ -280,7 +353,9 @@ export const StorageModal: React.FC<{
                             {storage.map((item, idx) => (
                                 <div key={`store-${idx}`} onClick={() => onWithdraw(item)} title={getItemTooltip(item)} className={`flex items-center justify-between p-2 bg-slate-950 border ${getRarityBorder(item.rarity)} rounded hover:bg-slate-900 cursor-pointer group transition-colors`}>
                                     <ArrowLeftRight size={14} className="text-slate-600 group-hover:text-amber-500 rotate-180" />
-                                    <span className={`text-sm ${getRarityText(item.rarity)}`}>{item.name}</span>
+                                    <span className={`text-sm ${getRarityText(item.rarity)}`}>
+                                        {item.name} {(item.quantity || 1) > 1 && <span className="text-slate-500 font-mono ml-1">x{item.quantity}</span>}
+                                    </span>
                                 </div>
                             ))}
                         </div>
@@ -288,7 +363,7 @@ export const StorageModal: React.FC<{
                 </div>
                 
                 <div className="p-2 bg-slate-950 border-t border-slate-800 text-center text-xs text-slate-500">
-                    Click items to transfer between Inventory and Storage.
+                    Click items to transfer one unit between Inventory and Storage.
                 </div>
             </div>
         </div>
@@ -510,7 +585,7 @@ export const CharacterCreation: React.FC<{ onComplete: (player: Partial<Player>)
         name, 
         race, 
         class: pClass, 
-        inventory: [ITEMS['BREAD'], ITEMS['POTION_HP']], // Starter consumables
+        inventory: [{ ...ITEMS['BREAD'], quantity: 3 }, { ...ITEMS['POTION_HP'], quantity: 2 }], // Starter consumables
         baseStats: currentStats,
         equipment
     });
@@ -994,7 +1069,9 @@ export const ShopInterface: React.FC<{
                                                 {item.type === 'WEAPON' ? <Sword size={18} /> : item.type === 'ARMOR' ? <Shield size={18} /> : <Package size={18} />}
                                             </div>
                                             <div>
-                                                <div className={`font-bold ${getRarityText(item.rarity)}`}>{item.name}</div>
+                                                <div className={`font-bold ${getRarityText(item.rarity)}`}>
+                                                    {item.name} {(item.quantity || 1) > 1 && <span className="text-slate-500 font-mono ml-1">x{item.quantity}</span>}
+                                                </div>
                                                 <div className="text-[10px] text-slate-500 uppercase">{item.type} {item.material ? `• ${item.material}` : ''}</div>
                                             </div>
                                         </div>

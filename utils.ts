@@ -2,6 +2,55 @@
 import { Player, Stats, TileType, Weather, TimeOfDay, NPC, DerivedStats, Enemy, Quest, QuestType, QuestStatus, Item, EquipmentSlot, ItemRarity, ItemMaterial, StatusEffect, GameDate } from './types';
 import { ENEMY_TEMPLATES, BASE_STATS, SKILLS, CLASSES, RACES, ITEMS, RARITY_MULTIPLIERS, MATERIAL_STATS } from './constants';
 
+// --- Inventory Stacking Logic ---
+
+export const addToInventory = (inventory: Item[], newItem: Item, amount: number = 1): Item[] => {
+    const newInv = [...inventory];
+    
+    // Equipment usually doesn't stack (unique IDs or distinct properties), but Consumables/Misc do
+    const isStackable = newItem.type === 'CONSUMABLE' || newItem.type === 'MISC';
+    
+    if (isStackable) {
+        const existingItemIndex = newInv.findIndex(i => i.id === newItem.id);
+        if (existingItemIndex >= 0) {
+            // Update existing stack
+            const existingItem = newInv[existingItemIndex];
+            newInv[existingItemIndex] = {
+                ...existingItem,
+                quantity: (existingItem.quantity || 1) + amount
+            };
+        } else {
+            // Add new item
+            newInv.push({ ...newItem, quantity: amount });
+        }
+    } else {
+        // Add unique items individually
+        for (let i = 0; i < amount; i++) {
+            newInv.push({ ...newItem, quantity: 1 });
+        }
+    }
+    
+    return newInv;
+};
+
+export const removeFromInventory = (inventory: Item[], itemToRemove: Item, amount: number = 1): Item[] => {
+    const newInv = [...inventory];
+    const index = newInv.findIndex(i => i === itemToRemove || i.id === itemToRemove.id); // match ref or id for stackables
+    
+    if (index >= 0) {
+        const item = newInv[index];
+        const currentQty = item.quantity || 1;
+        
+        if (currentQty > amount) {
+            newInv[index] = { ...item, quantity: currentQty - amount };
+        } else {
+            newInv.splice(index, 1);
+        }
+    }
+    return newInv;
+};
+
+
 // --- Stats Calculation ---
 
 export const calculateStats = (player: Player | Enemy): { derived: DerivedStats, totalStats: Stats } => {
@@ -155,7 +204,8 @@ export const generateProceduralItem = (level: number, type: 'WEAPON' | 'ARMOR'):
         material,
         damage: type === 'WEAPON' ? Math.floor(5 * rarityMult + level) : undefined,
         defense: type === 'ARMOR' ? Math.floor(2 * rarityMult + level * 0.5) : undefined,
-        stats
+        stats,
+        quantity: 1
     };
 };
 
@@ -166,28 +216,33 @@ export const generateShopInventory = (role: string, level: number): Item[] => {
 
     // Always add basics based on role
     if (r.includes('merchant') || r.includes('general')) {
-        inventory.push(ITEMS['POTION_HP']);
-        inventory.push(ITEMS['BREAD']);
-        inventory.push(ITEMS['GIFT_FLOWER']);
+        inventory.push({ ...ITEMS['POTION_HP'], quantity: 1 });
+        inventory.push({ ...ITEMS['BREAD'], quantity: 1 });
+        inventory.push({ ...ITEMS['GIFT_FLOWER'], quantity: 1 });
     }
     if (r.includes('alchemist')) {
-        inventory.push(ITEMS['POTION_HP']);
-        inventory.push(ITEMS['POTION_MAX']);
-        inventory.push(ITEMS['MAGIC_DUST']);
+        inventory.push({ ...ITEMS['POTION_HP'], quantity: 1 });
+        inventory.push({ ...ITEMS['POTION_MAX'], quantity: 1 });
+        inventory.push({ ...ITEMS['MAGIC_DUST'], quantity: 1 });
     }
     if (r.includes('baker')) {
-        inventory.push(ITEMS['BREAD']);
-        inventory.push(ITEMS['CHEESE']);
-        inventory.push(ITEMS['STEAK']);
+        inventory.push({ ...ITEMS['BREAD'], quantity: 1 });
+        inventory.push({ ...ITEMS['CHEESE'], quantity: 1 });
+        inventory.push({ ...ITEMS['STEAK'], quantity: 1 });
     }
 
     // Procedural Gear
     for(let i=0; i<count; i++) {
-        if (r.includes('weapon') || r.includes('smith')) {
+        // Specific checks first
+        if (r.includes('weapon')) {
              inventory.push(generateProceduralItem(level, 'WEAPON'));
         }
         else if (r.includes('armor')) {
              inventory.push(generateProceduralItem(level, 'ARMOR'));
+        }
+        else if (r.includes('smith')) {
+             // Generic smith might have either, but prioritize weapons if ambiguous unless explicitly armor
+             inventory.push(generateProceduralItem(level, Math.random() > 0.3 ? 'WEAPON' : 'ARMOR'));
         }
         else if (r.includes('merchant')) {
              if (Math.random() > 0.7) inventory.push(generateProceduralItem(level, Math.random() > 0.5 ? 'WEAPON' : 'ARMOR'));
@@ -225,6 +280,11 @@ export const generateEnemy = (tileType: TileType, playerLevel: number): Enemy =>
     // Derived HP for Enemy
     const maxHp = Math.floor((50 + (stats.constitution * 5)) * scale);
 
+    const statusEffects: StatusEffect[] = [];
+    if (rarity >= 3) {
+        statusEffects.push({ id: `buff_str_${Date.now()}`, type: 'BUFF_STR', name: 'Rage', duration: 99, value: 5 });
+    }
+
     return {
         id: `enemy_${Date.now()}`,
         name: `${rarity === 2 ? 'Vicious ' : rarity === 3 ? 'Alpha ' : ''}${template.name}`,
@@ -238,7 +298,7 @@ export const generateEnemy = (tileType: TileType, playerLevel: number): Enemy =>
         lootTable: template.lootTable || [],
         type: tileType,
         race: template.race,
-        statusEffects: []
+        statusEffects
     };
 };
 
