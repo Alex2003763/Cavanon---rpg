@@ -47,7 +47,9 @@ export enum GameMode {
   CHARACTER = 'CHARACTER',
   STORAGE = 'STORAGE',
   QUESTS = 'QUESTS',
-  SHOP = 'SHOP'
+  SHOP = 'SHOP',
+  SAVE = 'SAVE',
+  LOAD = 'LOAD'
 }
 
 export enum EquipmentSlot {
@@ -168,6 +170,16 @@ export interface Quest {
     status: QuestStatus;
 }
 
+export type StatusEffectType = 'POISON' | 'STUN' | 'REGEN' | 'BUFF_STR' | 'BUFF_DEF' | 'BLEED' | 'BURN' | 'FREEZE';
+
+export interface StatusEffect {
+  id: string;
+  type: StatusEffectType;
+  duration: number; // Turns
+  value?: number; // Intensity
+  name: string;
+}
+
 export interface Player {
   name: string;
   race: string;
@@ -187,6 +199,7 @@ export interface Player {
   skills: string[];
   quests: Quest[];
   completedQuestIds: string[];
+  statusEffects: StatusEffect[];
 }
 
 export interface NPC {
@@ -204,6 +217,7 @@ export interface NPC {
   isMerchant?: boolean;
   isQuestGiver?: boolean;
   hasGeneratedInventory?: boolean; // Track if we've procedurally filled this shop
+  lastRestockDay?: number; // Total days when last stocked
 }
 
 export interface DialogueOption {
@@ -267,6 +281,7 @@ export interface Enemy {
   lootTable: { itemId: string; chance: number }[];
   type: TileType;
   race?: string;
+  statusEffects: StatusEffect[];
 }
 
 export enum BattleSpeed {

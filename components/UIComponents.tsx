@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity } from '../types';
+import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity, GameState } from '../types';
 import { ITEMS, BASE_STATS, RACES, CLASSES, SKILLS, ENEMY_TEMPLATES, TILE_ICONS } from '../constants';
-import { calculateStats } from '../utils';
-import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity } from 'lucide-react';
+import { calculateStats, formatDate, formatTime } from '../utils';
+import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity, RefreshCw, Disc, FileText, LogOut } from 'lucide-react';
 
 // Helper for rarity styling
 const getRarityBorder = (rarity?: ItemRarity) => {
@@ -610,33 +611,112 @@ export const CharacterCreation: React.FC<{ onComplete: (player: Partial<Player>)
   );
 };
 
+export const SaveLoadModal: React.FC<{
+    mode: 'SAVE' | 'LOAD';
+    onClose: () => void;
+    onAction: (slot: number) => void;
+}> = ({ mode, onClose, onAction }) => {
+    const [slots, setSlots] = useState<any[]>([]);
+    
+    useEffect(() => {
+        const loadedSlots = [];
+        for(let i=1; i<=3; i++) {
+            try {
+                const data = localStorage.getItem(`cavanon_save_${i}`);
+                if (data) {
+                    loadedSlots.push(JSON.parse(data));
+                } else {
+                    loadedSlots.push(null);
+                }
+            } catch (e) {
+                loadedSlots.push(null);
+            }
+        }
+        setSlots(loadedSlots);
+    }, []);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-600 p-6 w-full max-w-lg rounded shadow-2xl">
+                <h3 className="pixel-font text-xl text-amber-500 mb-6 border-b border-slate-700 pb-2 flex items-center gap-2">
+                    {mode === 'SAVE' ? <Save size={24}/> : <Upload size={24}/>}
+                    {mode === 'SAVE' ? 'Save Game' : 'Load Game'}
+                </h3>
+                
+                <div className="space-y-4 mb-6">
+                    {slots.map((slot, idx) => (
+                        <button 
+                            key={idx}
+                            onClick={() => onAction(idx + 1)}
+                            className={`w-full text-left p-4 rounded border transition-all flex justify-between items-center group relative overflow-hidden
+                                ${slot 
+                                    ? 'bg-slate-900 border-slate-700 hover:border-amber-500 hover:bg-slate-800' 
+                                    : 'bg-slate-950 border-slate-800 hover:border-slate-600 border-dashed'
+                                }`}
+                        >
+                             {slot ? (
+                                 <div className="relative z-10 w-full">
+                                     <div className="flex justify-between items-center mb-1">
+                                         <span className="font-bold text-amber-100">Slot {idx + 1}</span>
+                                         <span className="text-[10px] text-slate-500 font-mono">{formatDate(slot.date)} {formatTime(slot.date)}</span>
+                                     </div>
+                                     <div className="text-xs text-slate-400 flex items-center gap-2">
+                                         <span className="text-white font-bold">{slot.player.name}</span>
+                                         <span>•</span>
+                                         <span>Lvl {slot.player.level} {slot.player.class}</span>
+                                         <span>•</span>
+                                         <span className="text-slate-500">{slot.maps[slot.currentMapId]?.name || 'Unknown'}</span>
+                                     </div>
+                                 </div>
+                             ) : (
+                                 <div className="relative z-10 flex items-center gap-3 text-slate-600 w-full">
+                                     <span className="font-bold">Slot {idx + 1}</span>
+                                     <span className="italic text-xs opacity-50">Empty Slot</span>
+                                 </div>
+                             )}
+                             {/* Hover Effect */}
+                             <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        </button>
+                    ))}
+                </div>
+                
+                <Button onClick={onClose} className="w-full py-3">Cancel</Button>
+            </div>
+        </div>
+    );
+};
+
 export const SettingsModal: React.FC<{ 
     onClose: () => void;
-    onSave: () => void;
-    onLoad: () => void;
+    onLoadGame: () => void;
     isMainMenu?: boolean;
-}> = ({ onClose, onSave, onLoad, isMainMenu }) => (
+}> = ({ onClose, onLoadGame, isMainMenu }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
     <div className="bg-slate-900 border border-slate-600 p-6 w-full max-w-sm rounded shadow-2xl">
-      <h3 className="pixel-font text-lg text-slate-200 mb-4">System</h3>
+      <h3 className="pixel-font text-lg text-slate-200 mb-4">System Menu</h3>
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center">
           <span className="text-slate-400">Text Speed</span>
-          <select className="bg-slate-950 border border-slate-700 text-slate-200 p-1 text-xs">
+          <select className="bg-slate-950 border border-slate-700 text-slate-200 p-1 text-xs rounded">
             <option>Normal</option>
             <option>Fast</option>
             <option>Instant</option>
           </select>
         </div>
+        <div className="flex justify-between items-center">
+          <span className="text-slate-400">Music Volume</span>
+           <span className="text-slate-600 text-xs italic">Off</span>
+        </div>
+
         <div className="border-t border-slate-800 pt-4 space-y-2">
-            {!isMainMenu && (
-                <Button variant="secondary" onClick={onSave} className="w-full flex gap-2">
-                    <Save size={16} /> Save Game
-                </Button>
-            )}
-            <Button variant="secondary" onClick={onLoad} className="w-full flex gap-2">
+            <Button variant="secondary" onClick={onLoadGame} className="w-full flex gap-2 py-3">
                 <Upload size={16} /> Load Game
             </Button>
+            {!isMainMenu && (
+                <Button variant="danger" onClick={() => window.location.reload()} className="w-full flex gap-2 py-3 mt-4">
+                    <LogOut size={16} /> Quit to Title
+                </Button>
+            )}
         </div>
       </div>
       <Button onClick={onClose} className="w-full">Close</Button>
@@ -825,8 +905,9 @@ export const ShopInterface: React.FC<{
     player: Player;
     onBuy: (item: Item) => void;
     onSell: (item: Item) => void;
+    onRestock: () => void;
     onClose: () => void;
-}> = ({ merchantName, merchantInventory, player, onBuy, onSell, onClose }) => {
+}> = ({ merchantName, merchantInventory, player, onBuy, onSell, onRestock, onClose }) => {
     const [activeTab, setActiveTab] = useState<'BUY' | 'SELL'>('BUY');
 
     return (
@@ -848,19 +929,32 @@ export const ShopInterface: React.FC<{
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-800 bg-slate-900">
-                    <button 
-                        onClick={() => setActiveTab('BUY')} 
-                        className={`flex-1 py-3 font-bold uppercase tracking-wider text-sm transition-colors ${activeTab === 'BUY' ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        Buy
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('SELL')} 
-                        className={`flex-1 py-3 font-bold uppercase tracking-wider text-sm transition-colors ${activeTab === 'SELL' ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        Sell
-                    </button>
+                <div className="flex border-b border-slate-800 bg-slate-900 justify-between pr-4">
+                    <div className="flex flex-1">
+                        <button 
+                            onClick={() => setActiveTab('BUY')} 
+                            className={`flex-1 py-3 font-bold uppercase tracking-wider text-sm transition-colors ${activeTab === 'BUY' ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Buy
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('SELL')} 
+                            className={`flex-1 py-3 font-bold uppercase tracking-wider text-sm transition-colors ${activeTab === 'SELL' ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Sell
+                        </button>
+                    </div>
+                    <div className="flex items-center">
+                        <Button 
+                            variant="secondary" 
+                            onClick={onRestock} 
+                            disabled={player.gold < 100}
+                            className="text-xs h-8 gap-2"
+                            title="Pay 100g to get new items immediately"
+                        >
+                            <RefreshCw size={12} /> Restock (100g)
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Content */}

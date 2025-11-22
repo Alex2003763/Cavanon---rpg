@@ -1,5 +1,5 @@
 
-import { Player, Stats, TileType, Weather, TimeOfDay, NPC, DerivedStats, Enemy, Quest, QuestType, QuestStatus, Item, EquipmentSlot, ItemRarity, ItemMaterial } from './types';
+import { Player, Stats, TileType, Weather, TimeOfDay, NPC, DerivedStats, Enemy, Quest, QuestType, QuestStatus, Item, EquipmentSlot, ItemRarity, ItemMaterial, StatusEffect, GameDate } from './types';
 import { ENEMY_TEMPLATES, BASE_STATS, SKILLS, CLASSES, RACES, ITEMS, RARITY_MULTIPLIERS, MATERIAL_STATS } from './constants';
 
 // --- Stats Calculation ---
@@ -19,6 +19,14 @@ export const calculateStats = (player: Player | Enemy): { derived: DerivedStats,
         });
     } else {
         totalStats = { ...player.stats };
+    }
+
+    // Status Effect Modifiers (Simple implementation)
+    if (player.statusEffects) {
+        player.statusEffects.forEach(effect => {
+            if (effect.type === 'BUFF_STR') totalStats.strength += (effect.value || 0);
+            if (effect.type === 'BUFF_DEF') totalStats.constitution += (effect.value || 0);
+        });
     }
 
     // Derived Logic
@@ -63,6 +71,10 @@ export const formatDate = (date: { year: number, month: number, day: number }) =
     return `Y${date.year} M${date.month} D${date.day}`;
 };
 
+export const calculateTotalDays = (date: GameDate): number => {
+    return (date.year * 360) + (date.month * 30) + date.day;
+};
+
 // --- Procedural Generation ---
 
 const ADJECTIVES: Record<TileType, string[]> = {
@@ -76,7 +88,7 @@ const ADJECTIVES: Record<TileType, string[]> = {
   [TileType.VOID]: ['empty'],
   [TileType.PORTAL]: ['shimmering', 'unstable', 'glowing', 'mystical'],
   [TileType.WALL]: ['solid', 'impenetrable', 'stone', 'brick'],
-  [TileType.FLOOR]: ['dusty', 'clean', 'wooden', 'tiled']
+  [TileType.FLOOR]: ['dusty', 'polished', 'wooden', 'stone']
 };
 
 export const generateLocationDescription = (
@@ -85,8 +97,7 @@ export const generateLocationDescription = (
   time: TimeOfDay,
   npcs: NPC[]
 ): string => {
-  const adjList = ADJECTIVES[tileType] || ['average'];
-  const adj = adjList[Math.floor(Math.random() * adjList.length)];
+  const adj = ADJECTIVES[tileType][Math.floor(Math.random() * ADJECTIVES[tileType].length)];
   let base = `You are in a ${adj} ${tileType.toLowerCase()}. It is ${time.toLowerCase()} and ${weather.toLowerCase()}.`;
   
   if (npcs.length > 0) {
@@ -97,375 +108,292 @@ export const generateLocationDescription = (
   return base;
 };
 
-// --- Procedural Item Generation ---
-
 export const generateProceduralItem = (level: number, type: 'WEAPON' | 'ARMOR'): Item => {
+    const materials = Object.values(ItemMaterial);
+    // Simple material selection based on level tiers
+    let material = ItemMaterial.IRON;
+    if (level > 3) material = ItemMaterial.STEEL;
+    if (level > 8) material = ItemMaterial.MITHRIL;
+    if (level > 15) material = ItemMaterial.ADAMANTITE;
+    
+    if (type === 'ARMOR' && level < 5) material = Math.random() > 0.5 ? ItemMaterial.LEATHER : ItemMaterial.IRON;
+
+    const matData = MATERIAL_STATS[material];
     const rarityRoll = Math.random();
     let rarity = ItemRarity.COMMON;
-    if (rarityRoll > 0.95) rarity = ItemRarity.LEGENDARY;
-    else if (rarityRoll > 0.85) rarity = ItemRarity.EPIC;
-    else if (rarityRoll > 0.70) rarity = ItemRarity.RARE;
-    else if (rarityRoll > 0.40) rarity = ItemRarity.UNCOMMON;
+    if (rarityRoll > 0.7) rarity = ItemRarity.UNCOMMON;
+    if (rarityRoll > 0.9) rarity = ItemRarity.RARE;
+    if (rarityRoll > 0.98) rarity = ItemRarity.EPIC;
 
-    // Material Selection based on type
-    let validMaterials = [ItemMaterial.IRON, ItemMaterial.STEEL];
-    if (level > 5) validMaterials.push(ItemMaterial.MITHRIL);
-    if (level > 10) validMaterials.push(ItemMaterial.ADAMANTITE);
-    if (level > 15) validMaterials.push(ItemMaterial.DRAGON_BONE);
-
-    if (type === 'ARMOR') {
-        validMaterials.push(ItemMaterial.LEATHER, ItemMaterial.CLOTH);
-        if (level > 8) validMaterials.push(ItemMaterial.SILK);
-    } else {
-        validMaterials.push(ItemMaterial.WOOD, ItemMaterial.OBSIDIAN);
-    }
-
-    const material = validMaterials[Math.floor(Math.random() * validMaterials.length)];
-    const matData = MATERIAL_STATS[material];
     const rarityMult = RARITY_MULTIPLIERS[rarity];
+    const id = `${type}_${material}_${Date.now()}_${Math.floor(Math.random()*1000)}`;
     
-    const baseVal = level * 10 + matData.baseValue;
-    const value = Math.floor(baseVal * rarityMult * (0.8 + Math.random() * 0.4));
+    const baseName = type === 'WEAPON' 
+        ? (['Sword', 'Axe', 'Mace', 'Dagger'][Math.floor(Math.random() * 4)])
+        : (['Helmet', 'Armor', 'Boots', 'Shield'][Math.floor(Math.random() * 4)]);
 
-    let name = `${rarity === ItemRarity.COMMON ? '' : rarity.charAt(0) + rarity.slice(1).toLowerCase() + ' '}${matData.name} `;
-    let description = `A ${rarity.toLowerCase()} item made of ${matData.name.toLowerCase()}.`;
-    let slot: EquipmentSlot = EquipmentSlot.MAIN_HAND;
-    let damage = 0;
-    let defense = 0;
-    let stats: Partial<Stats> = { ...matData.stats };
+    const slot = baseName === 'Sword' || baseName === 'Axe' || baseName === 'Mace' || baseName === 'Dagger' ? EquipmentSlot.MAIN_HAND :
+                 baseName === 'Shield' ? EquipmentSlot.OFF_HAND :
+                 baseName === 'Helmet' ? EquipmentSlot.HEAD :
+                 baseName === 'Boots' ? EquipmentSlot.FEET : EquipmentSlot.BODY;
 
-    // Scale stats by rarity
-    Object.keys(stats).forEach(k => {
-        const key = k as keyof Stats;
-        if (stats[key]) stats[key] = Math.ceil(stats[key]! * rarityMult);
-    });
-
-    if (type === 'WEAPON') {
-        const weapons = [
-            { sub: 'Sword', dmg: 6, slot: EquipmentSlot.MAIN_HAND },
-            { sub: 'Axe', dmg: 8, slot: EquipmentSlot.MAIN_HAND },
-            { sub: 'Dagger', dmg: 4, slot: EquipmentSlot.MAIN_HAND },
-            { sub: 'Staff', dmg: 3, slot: EquipmentSlot.MAIN_HAND },
-            { sub: 'Mace', dmg: 7, slot: EquipmentSlot.MAIN_HAND },
-        ];
-        const w = weapons[Math.floor(Math.random() * weapons.length)];
-        name += w.sub;
-        slot = w.slot;
-        damage = Math.ceil((w.dmg + (level * 0.5)) * rarityMult);
-        if (material === ItemMaterial.WOOD) damage = Math.ceil(damage * 0.7); // Wood weapons weaker physically
-        
-        description = `${description} Deals ${damage} damage.`;
-    } else {
-        const armors = [
-            { sub: 'Helmet', def: 2, slot: EquipmentSlot.HEAD },
-            { sub: 'Chestplate', def: 6, slot: EquipmentSlot.BODY },
-            { sub: 'Leggings', def: 4, slot: EquipmentSlot.LEGS },
-            { sub: 'Boots', def: 2, slot: EquipmentSlot.FEET },
-            { sub: 'Shield', def: 4, slot: EquipmentSlot.OFF_HAND },
-        ];
-        const a = armors[Math.floor(Math.random() * armors.length)];
-        name += a.sub;
-        slot = a.slot;
-        defense = Math.ceil((a.def + (level * 0.3)) * rarityMult);
-        
-        if (material === ItemMaterial.CLOTH || material === ItemMaterial.SILK) defense = Math.ceil(defense * 0.5); // Cloth is weak
-
-        description = `${description} Provides ${defense} defense.`;
+    const stats: Partial<Stats> = {};
+    if (matData.stats) {
+        Object.entries(matData.stats).forEach(([k, v]) => {
+            stats[k as keyof Stats] = Math.ceil((v as number) * rarityMult);
+        });
     }
 
     return {
-        id: `proc_${Date.now()}_${Math.random()}`,
-        name,
+        id,
+        name: `${rarity !== ItemRarity.COMMON ? rarity.charAt(0) + rarity.slice(1).toLowerCase() + ' ' : ''}${matData.name} ${baseName}`,
         type,
         slot,
-        value,
-        description,
-        stats,
-        damage,
-        defense,
+        value: Math.floor(matData.baseValue * rarityMult * (1 + level * 0.1)),
+        description: `A ${rarity.toLowerCase()} ${baseName.toLowerCase()} made of ${matData.name.toLowerCase()}.`,
         rarity,
-        material
+        material,
+        damage: type === 'WEAPON' ? Math.floor(5 * rarityMult + level) : undefined,
+        defense: type === 'ARMOR' ? Math.floor(2 * rarityMult + level * 0.5) : undefined,
+        stats
     };
 };
 
-// --- Quest Generation ---
+export const generateShopInventory = (role: string, level: number): Item[] => {
+    const inventory: Item[] = [];
+    const r = role.toLowerCase();
+    const count = 5;
 
-export const generateRandomQuest = (playerLevel: number): Quest => {
-    const isKillQuest = Math.random() > 0.4; // 60% Chance for Kill Quest
-    const id = `quest_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    
-    if (isKillQuest) {
-        // Pick a random biome
-        const biomes = [TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS];
-        const biome = biomes[Math.floor(Math.random() * biomes.length)];
-        const enemies = ENEMY_TEMPLATES[biome];
-        
-        if (!enemies) return generateRandomQuest(playerLevel); // fallback
-
-        const targetEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-        const amount = Math.floor(Math.random() * 3) + 2; // 2 to 5
-        
-        // Rewards scaling
-        const expReward = Math.floor((playerLevel * 20) + (amount * 10));
-        const goldReward = Math.floor((playerLevel * 5) + (amount * 5));
-        
-        return {
-            id,
-            type: QuestType.KILL,
-            title: `Cull the ${targetEnemy.name}s`,
-            description: `The ${targetEnemy.name} population in the ${biome.toLowerCase()} is getting out of hand. Eliminate ${amount} of them.`,
-            targetId: targetEnemy.name, // Using name for kill tracking simplicity
-            targetName: targetEnemy.name,
-            amountRequired: amount,
-            amountCurrent: 0,
-            expReward,
-            goldReward,
-            status: QuestStatus.ACTIVE
-        };
-    } else {
-        // Collect Quest
-        const collectables = Object.values(ITEMS).filter(i => i.type === 'MISC' || i.type === 'CONSUMABLE');
-        const targetItem = collectables[Math.floor(Math.random() * collectables.length)];
-        const amount = Math.floor(Math.random() * 3) + 1; // 1 to 3
-        
-        const expReward = Math.floor((playerLevel * 15) + (targetItem.value * amount));
-        const goldReward = Math.floor((targetItem.value * amount) * 1.5) + 10;
-
-        return {
-             id,
-             type: QuestType.COLLECT,
-             title: `Supply Run: ${targetItem.name}`,
-             description: `I am in desperate need of ${amount} ${targetItem.name}. Can you bring them to me?`,
-             targetId: targetItem.id,
-             targetName: targetItem.name,
-             amountRequired: amount,
-             amountCurrent: 0,
-             expReward,
-             goldReward,
-             status: QuestStatus.ACTIVE
-        };
+    // Always add basics based on role
+    if (r.includes('merchant') || r.includes('general')) {
+        inventory.push(ITEMS['POTION_HP']);
+        inventory.push(ITEMS['BREAD']);
+        inventory.push(ITEMS['GIFT_FLOWER']);
     }
+    if (r.includes('alchemist')) {
+        inventory.push(ITEMS['POTION_HP']);
+        inventory.push(ITEMS['POTION_MAX']);
+        inventory.push(ITEMS['MAGIC_DUST']);
+    }
+    if (r.includes('baker')) {
+        inventory.push(ITEMS['BREAD']);
+        inventory.push(ITEMS['CHEESE']);
+        inventory.push(ITEMS['STEAK']);
+    }
+
+    // Procedural Gear
+    for(let i=0; i<count; i++) {
+        if (r.includes('weapon') || r.includes('smith')) {
+             inventory.push(generateProceduralItem(level, 'WEAPON'));
+        }
+        else if (r.includes('armor')) {
+             inventory.push(generateProceduralItem(level, 'ARMOR'));
+        }
+        else if (r.includes('merchant')) {
+             if (Math.random() > 0.7) inventory.push(generateProceduralItem(level, Math.random() > 0.5 ? 'WEAPON' : 'ARMOR'));
+        }
+    }
+
+    return inventory;
 };
-
-
-// --- Combat Logic ---
 
 export const generateEnemy = (tileType: TileType, playerLevel: number): Enemy => {
     const templates = ENEMY_TEMPLATES[tileType] || ENEMY_TEMPLATES[TileType.GRASS]!;
     const template = templates[Math.floor(Math.random() * templates.length)];
     
-    let levelOffset = 0;
-    if (tileType === TileType.DUNGEON || tileType === TileType.MOUNTAIN) levelOffset = 2;
-    if (tileType === TileType.GRASS) levelOffset = -1;
-    
-    const level = Math.max(1, playerLevel + levelOffset + Math.floor(Math.random() * 3) - 1);
-    
-    // Determine Rarity (1 to 5 Stars)
-    const rarityRoll = Math.random();
+    // Scaling
+    const level = Math.max(1, playerLevel + Math.floor(Math.random() * 3) - 1);
+    const scale = 1 + (level * 0.1);
+
+    // Rarity Check
+    const roll = Math.random();
     let rarity = 1;
-    if (rarityRoll > 0.98) rarity = 5;      // 2% Legendary
-    else if (rarityRoll > 0.90) rarity = 4; // 8% Epic
-    else if (rarityRoll > 0.75) rarity = 3; // 15% Rare
-    else if (rarityRoll > 0.50) rarity = 2; // 25% Uncommon
-    else rarity = 1;                        // 50% Common
-
-    // Rarity Multiplier
-    // Common: 0.8x, Uncommon: 1.0x, Rare: 1.2x, Epic: 1.5x, Legendary: 2.0x
-    const rarityMultipliers = { 1: 0.8, 2: 1.0, 3: 1.2, 4: 1.5, 5: 2.0 };
-    const rMult = rarityMultipliers[rarity as keyof typeof rarityMultipliers];
-
-    // Reduced level scaling factor (was 0.15)
-    const scaleFactor = (1 + (level * 0.10)) * rMult;
+    if (roll > 0.8) rarity = 2; // Uncommon
+    if (roll > 0.95) rarity = 3; // Rare
+    
+    const rarityMult = 1 + ((rarity - 1) * 0.5);
 
     const stats: Stats = {
-        strength: Math.floor(template.stats!.strength * scaleFactor),
-        dexterity: Math.floor(template.stats!.dexterity * scaleFactor),
-        intelligence: Math.floor(template.stats!.intelligence * scaleFactor),
-        constitution: Math.floor(template.stats!.constitution * scaleFactor),
-        speed: Math.floor(template.stats!.speed * scaleFactor),
-        luck: Math.floor(template.stats!.luck * scaleFactor),
+        strength: Math.floor(template.stats!.strength! * scale * rarityMult),
+        dexterity: Math.floor(template.stats!.dexterity! * scale * rarityMult),
+        intelligence: Math.floor(template.stats!.intelligence! * scale * rarityMult),
+        constitution: Math.floor(template.stats!.constitution! * scale * rarityMult),
+        speed: Math.floor(template.stats!.speed! * scale * rarityMult),
+        luck: Math.floor(template.stats!.luck! * scale * rarityMult)
     };
 
-    const hp = Math.floor(50 + (stats.constitution * 5) + (level * 10));
+    // Derived HP for Enemy
+    const maxHp = Math.floor((50 + (stats.constitution * 5)) * scale);
 
     return {
-        id: `enemy_${Date.now()}_${Math.random()}`,
-        name: template.name || 'Unknown Entity',
+        id: `enemy_${Date.now()}`,
+        name: `${rarity === 2 ? 'Vicious ' : rarity === 3 ? 'Alpha ' : ''}${template.name}`,
         level,
         rarity,
-        hp,
-        maxHp: hp,
+        hp: maxHp,
+        maxHp: maxHp,
         stats,
-        expReward: Math.floor(10 * scaleFactor * rMult), // Double dip rarity for reward
-        goldReward: Math.floor(Math.random() * 5 * scaleFactor * rMult),
+        expReward: Math.floor(10 * level * rarityMult),
+        goldReward: Math.floor(5 * level * rarityMult),
         lootTable: template.lootTable || [],
         type: tileType,
-        race: template.race
+        race: template.race,
+        statusEffects: []
     };
+};
+
+export const resolveAutoTurn = (player: Player, enemy: Enemy, cooldowns: Record<string, number>): { 
+    playerHp: number, 
+    enemyHp: number, 
+    playerMp: number, 
+    newCooldowns: Record<string, number>, 
+    logs: string[] 
+} => {
+    const pStats = calculateStats(player);
+    const eStats = calculateStats(enemy);
+    const logs: string[] = [];
+    
+    let playerHp = player.hp;
+    let enemyHp = enemy.hp;
+    let playerMp = player.mp;
+    let newCooldowns = { ...cooldowns };
+
+    // Decrement Cooldowns
+    Object.keys(newCooldowns).forEach(k => {
+        if (newCooldowns[k] > 0) newCooldowns[k]--;
+    });
+
+    // --- Player Turn ---
+    
+    // Determine Action (Skill vs Attack)
+    const classData = CLASSES[player.class];
+    const skill = SKILLS[classData?.skillId];
+    let usedSkill = false;
+
+    // AI: Use skill if off cooldown and enough MP
+    if (skill && (newCooldowns[skill.id] || 0) === 0 && playerMp >= skill.mpCost) {
+        usedSkill = true;
+        newCooldowns[skill.id] = skill.cooldown;
+        playerMp -= skill.mpCost;
+        
+        logs.push(`You used ${skill.name}!`);
+        
+        // Skill Effects (Hardcoded for simplicity/safety vs Eval)
+        let dmgMult = 1.0;
+        if (skill.id === 'POWER_SLASH') dmgMult = 1.5;
+        if (skill.id === 'FIREBALL') dmgMult = 1.8; // Magic
+        if (skill.id === 'SHADOW_STRIKE') dmgMult = 1.2; // Crit bonus handled below
+        if (skill.id === 'RECKLESS_BLOW') {
+            dmgMult = 2.5;
+            const recoil = pStats.derived.maxHp * 0.1;
+            playerHp -= recoil;
+            logs.push(`You took ${Math.floor(recoil)} recoil damage.`);
+        }
+        if (skill.id === 'HOLY_LIGHT') {
+            const heal = pStats.totalStats.intelligence * 3;
+            playerHp = Math.min(pStats.derived.maxHp, playerHp + heal);
+            logs.push(`Recovered ${heal} HP.`);
+            dmgMult = 0; // No damage
+        }
+
+        if (dmgMult > 0) {
+            // Calculate Damage
+            const isPhys = skill.id !== 'FIREBALL';
+            const atk = isPhys ? pStats.totalStats.strength : pStats.totalStats.intelligence;
+            const def = isPhys ? eStats.derived.physicalDef : eStats.derived.magicalDef;
+            
+            // Crit Check
+            let critBonus = 1.0;
+            let critChance = pStats.derived.critChance;
+            if (skill.id === 'SHADOW_STRIKE') critChance += 30;
+            if (Math.random() * 100 < critChance) {
+                critBonus = 1.5;
+                logs.push("CRITICAL HIT!");
+            }
+
+            // Weapon Damage Add
+            let weaponDmg = 0;
+            if (player.equipment[EquipmentSlot.MAIN_HAND]) weaponDmg = player.equipment[EquipmentSlot.MAIN_HAND]!.damage || 0;
+
+            const rawDmg = (atk + weaponDmg) * dmgMult * critBonus;
+            const finalDmg = Math.max(1, Math.floor(rawDmg - (def * 0.5))); // Defense mitigation
+            
+            enemyHp -= finalDmg;
+            logs.push(`Dealt ${finalDmg} damage to ${enemy.name}.`);
+        }
+    } else {
+        // Basic Attack
+        let weaponDmg = 0;
+        if (player.equipment[EquipmentSlot.MAIN_HAND]) weaponDmg = player.equipment[EquipmentSlot.MAIN_HAND]!.damage || 0;
+        
+        const atk = pStats.totalStats.strength;
+        const def = eStats.derived.physicalDef;
+        
+        let critBonus = 1.0;
+        if (Math.random() * 100 < pStats.derived.critChance) {
+             critBonus = 1.5;
+             logs.push("CRITICAL HIT!");
+        }
+
+        const rawDmg = (atk + weaponDmg) * critBonus;
+        const finalDmg = Math.max(1, Math.floor(rawDmg - (def * 0.5)));
+
+        enemyHp -= finalDmg;
+        logs.push(`You attacked ${enemy.name} for ${finalDmg} damage.`);
+    }
+
+    // --- Enemy Turn ---
+    if (enemyHp > 0) {
+        // Basic Enemy Logic: Attack
+        const atk = eStats.totalStats.strength;
+        const def = pStats.derived.physicalDef;
+        
+        // Evasion Check
+        if (Math.random() * 100 < pStats.derived.evasion) {
+            logs.push(`${enemy.name} attacked but you dodged!`);
+        } else {
+             const finalDmg = Math.max(1, Math.floor(atk - (def * 0.5)));
+             playerHp -= finalDmg;
+             logs.push(`${enemy.name} attacked you for ${finalDmg} damage.`);
+        }
+    }
+
+    return { playerHp, enemyHp, playerMp, newCooldowns, logs };
 };
 
 export const calculateFleeChance = (player: Player, enemy: Enemy): number => {
-    const { totalStats: pStats, derived: pDerived } = calculateStats(player);
-    const { totalStats: eStats } = calculateStats(enemy);
-
-    const baseChance = 50;
-    const speedDiff = (pStats.speed - eStats.speed) * 2; // Fast players flee easier
-    const luckBonus = pStats.luck * 1;
+    const pSpeed = calculateStats(player).totalStats.speed;
+    const eSpeed = enemy.stats.speed;
     
-    // Health Factor: Low HP makes it harder to run (injured)
-    const hpRatio = player.hp / pDerived.maxHp;
-    const hpPenalty = (1 - hpRatio) * 20; // Up to -20% at 0 HP
-
-    let chance = baseChance + speedDiff + luckBonus - hpPenalty;
-    
-    // Clamp between 5% and 95%
-    return Math.max(5, Math.min(95, Math.floor(chance)));
+    if (pSpeed > eSpeed) return 90;
+    return Math.max(10, 50 + (pSpeed - eSpeed) * 5);
 };
 
-const calculateDamage = (attacker: Player | Enemy, defender: Player | Enemy, baseDamage: number, isMagic: boolean): { damage: number, isCrit: boolean } => {
-    const { totalStats: attStats } = calculateStats(attacker);
-    const { derived: defStats } = calculateStats(defender);
+export const generateRandomQuest = (level: number): Quest => {
+    const type = Math.random() > 0.5 ? QuestType.KILL : QuestType.COLLECT;
+    const templates = type === QuestType.KILL ? [
+        { name: 'Wolf', title: 'Wolf Hunt', desc: 'Thin the wolf pack nearby.' },
+        { name: 'Bandit', title: 'Bandit Raid', desc: 'Stop the bandits terrorizing the road.' },
+        { name: 'Skeleton', title: 'Bone Breaker', desc: 'Put the restless dead to sleep.' }
+    ] : [
+        { name: 'Wolf Pelt', title: 'Fur Trade', desc: 'Collect pelts for the winter.' },
+        { name: 'Rat Tail', title: 'Vermin Control', desc: 'Bring proof of extermination.' }
+    ];
 
-    let attackValue = isMagic ? attStats.intelligence : attStats.strength;
-    let defenseValue = isMagic ? defStats.magicalDef : defStats.physicalDef;
-    
-    // Racial Passive: Orc (Bloodlust) - Attacker
-    if ('race' in attacker && attacker.race === 'Orc' && (attacker.hp / (50 + attStats.constitution * 5 + attacker.level * 10)) < 0.5) {
-        attackValue *= 1.2;
-    }
+    const t = templates[Math.floor(Math.random() * templates.length)];
+    const amount = Math.floor(Math.random() * 3) + 2;
 
-    // Crit Calc
-    const critRoll = Math.random() * 100;
-    const isCrit = critRoll < defStats.critChance; 
-    
-    if (isCrit) attackValue *= 1.5;
-    
-    let damage = Math.max(1, (attackValue * 2) - defenseValue);
-    
-    // Racial Passive: Dwarf (Iron Skin) - Defender
-    if ('race' in defender && defender.race === 'Dwarf') {
-        damage = Math.max(1, damage - 2);
-    }
-
-    // Variance +/- 10%
-    const variance = 0.9 + (Math.random() * 0.2);
-    damage = Math.floor((damage + baseDamage) * variance);
-    
-    return { damage, isCrit };
-};
-
-export const resolveAutoTurn = (
-    player: Player, 
-    enemy: Enemy, 
-    cooldowns: Record<string, number>
-): { 
-    playerHp: number, 
-    enemyHp: number, 
-    playerMp: number,
-    logs: string[],
-    newCooldowns: Record<string, number>
-} => {
-    const logs: string[] = [];
-    let pCurrentHp = player.hp;
-    let pCurrentMp = player.mp;
-    let eCurrentHp = enemy.hp;
-    let newCooldowns = { ...cooldowns };
-
-    const { totalStats: pStats, derived: pDerived } = calculateStats(player);
-    const { totalStats: eStats, derived: eDerived } = calculateStats(enemy);
-    
-    // Reduce cooldowns at start of turn
-    Object.keys(newCooldowns).forEach(key => {
-        if (newCooldowns[key] > 0) newCooldowns[key]--;
-    });
-
-    const performPlayerAction = () => {
-        if (eCurrentHp <= 0) return;
-
-        // Identify Player Class Skill
-        const classData = CLASSES[player.class];
-        const skillId = classData?.skillId;
-        const skill = skillId ? SKILLS[skillId] : null;
-
-        // Check if skill is usable
-        let usedSkill = false;
-        if (skill && pCurrentMp >= skill.mpCost && (!newCooldowns[skillId!] || newCooldowns[skillId!] === 0)) {
-            // Skill Logic
-            usedSkill = true;
-            pCurrentMp -= skill.mpCost;
-            newCooldowns[skillId!] = skill.cooldown;
-
-            if (skillId === 'HOLY_LIGHT') {
-                const healAmount = Math.floor(pStats.intelligence * 3);
-                pCurrentHp = Math.min(pDerived.maxHp, pCurrentHp + healAmount);
-                logs.push(`You cast ${skill.name} and healed ${healAmount} HP.`);
-            } 
-            else if (skillId === 'RECKLESS_BLOW') {
-                const { damage, isCrit } = calculateDamage(player, enemy, 0, false);
-                const finalDmg = Math.floor(damage * 2.5);
-                const recoil = Math.floor(pDerived.maxHp * 0.1);
-                eCurrentHp = Math.max(0, eCurrentHp - finalDmg);
-                pCurrentHp = Math.max(1, pCurrentHp - recoil);
-                logs.push(`You used ${skill.name}! Dealt ${finalDmg}${isCrit ? ' (CRIT!)' : ''} to enemy, took ${recoil} recoil.`);
-            }
-            else if (skillId === 'FIREBALL') {
-                 const { damage, isCrit } = calculateDamage(player, enemy, 0, true);
-                 const finalDmg = Math.floor(damage * 1.8);
-                 eCurrentHp = Math.max(0, eCurrentHp - finalDmg);
-                 logs.push(`You cast ${skill.name} for ${finalDmg}${isCrit ? ' (CRIT!)' : ''} magic damage!`);
-            }
-            else if (skillId === 'SHADOW_STRIKE') {
-                 // High Crit logic hack - manually calc damage with forced crit chance logic or just bonus mult
-                 let { damage } = calculateDamage(player, enemy, 0, false);
-                 // Simulate +30% crit check
-                 const critRoll = Math.random() * 100;
-                 const isSuperCrit = critRoll < (pDerived.critChance + 30);
-                 if (isSuperCrit) damage = Math.floor(damage * 1.5);
-                 
-                 eCurrentHp = Math.max(0, eCurrentHp - damage);
-                 logs.push(`You used ${skill.name}! Dealt ${damage}${isSuperCrit ? ' (CRIT!)' : ''} damage.`);
-            }
-            else if (skillId === 'POWER_SLASH') {
-                 const { damage, isCrit } = calculateDamage(player, enemy, 0, false);
-                 const finalDmg = Math.floor(damage * 1.5);
-                 eCurrentHp = Math.max(0, eCurrentHp - finalDmg);
-                 logs.push(`You used ${skill.name}! Dealt ${finalDmg}${isCrit ? ' (CRIT!)' : ''} damage.`);
-            }
-        } 
-
-        if (!usedSkill) {
-             // Basic Attack
-             let weaponDmg = 0;
-             if (player.equipment.MAIN_HAND?.damage) weaponDmg = player.equipment.MAIN_HAND.damage;
-             
-             const { damage, isCrit } = calculateDamage(player, enemy, weaponDmg, false);
-             eCurrentHp = Math.max(0, eCurrentHp - damage);
-             logs.push(`You attacked ${enemy.name} for ${damage}${isCrit ? ' (CRIT!)' : ''} damage.`);
-        }
+    return {
+        id: `quest_${Date.now()}`,
+        title: t.title,
+        description: t.desc,
+        type,
+        targetId: 'any', // Simplified matching by name
+        targetName: t.name,
+        amountRequired: amount,
+        amountCurrent: 0,
+        expReward: level * 50,
+        goldReward: level * 25,
+        status: QuestStatus.ACTIVE
     };
-
-    const performEnemyAction = () => {
-        if (pCurrentHp <= 0) return;
-
-        if (Math.random() < 0.2) {
-             const { damage, isCrit } = calculateDamage(enemy, player, 0, false);
-             const strongDmg = Math.floor(damage * 1.2);
-             pCurrentHp = Math.max(0, pCurrentHp - strongDmg);
-             logs.push(`${enemy.name} unleashed a ferocious attack for ${strongDmg}${isCrit ? ' (CRIT!)' : ''} damage!`);
-        } else {
-             const { damage, isCrit } = calculateDamage(enemy, player, 0, false);
-             pCurrentHp = Math.max(0, pCurrentHp - damage);
-             logs.push(`${enemy.name} attacked you for ${damage}${isCrit ? ' (CRIT!)' : ''} damage.`);
-        }
-    };
-
-    if (pStats.speed >= eStats.speed) {
-        performPlayerAction();
-        if (eCurrentHp > 0) performEnemyAction();
-    } else {
-        performEnemyAction();
-        if (pCurrentHp > 0) performPlayerAction();
-    }
-
-    return { playerHp: pCurrentHp, enemyHp: eCurrentHp, playerMp: pCurrentMp, logs, newCooldowns };
 };

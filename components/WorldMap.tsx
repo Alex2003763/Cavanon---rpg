@@ -1,3 +1,4 @@
+
 import React, { memo, useMemo } from 'react';
 import { Tile, TileType, Player, InteractableType, NPC } from '../types';
 import { TILE_COLORS, TILE_ICONS } from '../constants';
@@ -45,10 +46,11 @@ const MapTile = memo(({
   const isLandmark = [TileType.TOWN, TileType.DUNGEON, TileType.RUINS, TileType.PORTAL].includes(type);
 
   // Pre-calculate static classes
-  const baseClasses = "aspect-square flex items-center justify-center relative gpu-accelerate border";
+  // REMOVED: gpu-accelerate and heavy shadows on every tile
+  const baseClasses = "aspect-square flex items-center justify-center relative border";
   const bgClass = isVoid ? 'bg-black' : (isExplored ? TILE_COLORS[type] : 'bg-slate-950');
   const borderClass = !isExplored && !isVoid ? 'border-slate-900/20' : (isLandmark ? 'border-white/30' : 'border-slate-950/10');
-  const playerClasses = isPlayer ? 'ring-2 ring-yellow-400 z-30 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : '';
+  const playerClasses = isPlayer ? 'ring-2 ring-yellow-400 z-30' : '';
   const landmarkClasses = isLandmark && isExplored ? 'ring-1 ring-white/20 z-10' : '';
   
   // Render unexplored tiles as darker (0.1 opacity equivalent) via style color if needed, or just handle via class
@@ -151,7 +153,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
   }, [player.position.x, player.position.y, tiles, width, height, viewRadius, npcLookup]);
 
   return (
-    <div className="relative bg-slate-950 rounded-lg border-2 border-slate-700 shadow-2xl overflow-hidden h-[70vh] w-[70vh] md:h-[85vh] md:w-[85vh] mx-auto flex items-center justify-center p-1 gpu-accelerate strict-contain transition-all duration-300 group">
+    <div className="relative bg-slate-950 rounded-lg border-2 border-slate-700 shadow-2xl overflow-hidden h-[70vh] w-[70vh] md:h-[85vh] md:w-[85vh] mx-auto flex items-center justify-center p-1 strict-contain transition-all duration-300 group">
       {/* Vignette Overlay for Fog/Atmosphere - GPU accelerated mask */}
       <div 
          className="absolute inset-0 z-10 pointer-events-none"
