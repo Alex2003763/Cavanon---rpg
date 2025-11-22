@@ -1,4 +1,3 @@
-
 import React, { useReducer, useEffect, useCallback, useState, useRef, useMemo } from 'react';
 import WorldMap from './components/WorldMap';
 import { Panel, Button, StatBar, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface } from './components/UIComponents';
@@ -910,38 +909,54 @@ const App: React.FC = () => {
 
   }, [state.mode, state.player.position, state.currentMapId, state.maps, state.timeOfDay, state.npcs, state.player.level]);
 
+  // --- Input Handling Optimization (Ref Pattern) ---
+  
+  const handleMoveRef = useRef(handleMove);
+  const handleInteractRef = useRef(handleInteract);
+  const dispatchRef = useRef(dispatch);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+      handleMoveRef.current = handleMove;
+      handleInteractRef.current = handleInteract;
+      dispatchRef.current = dispatch;
+      stateRef.current = state;
+  }); // Update refs on every render
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isLoading) return;
-      if (state.mode === GameMode.CREATION) return;
+      const currentMode = stateRef.current.mode;
+
+      if (currentMode === GameMode.CREATION) return;
 
       switch(e.key.toLowerCase()) {
-        case 'w': handleMove(0, -1); break;
-        case 's': handleMove(0, 1); break;
-        case 'a': handleMove(-1, 0); break;
-        case 'd': handleMove(1, 0); break;
-        case 'e': handleInteract(); break;
+        case 'w': handleMoveRef.current(0, -1); break;
+        case 's': handleMoveRef.current(0, 1); break;
+        case 'a': handleMoveRef.current(-1, 0); break;
+        case 'd': handleMoveRef.current(1, 0); break;
+        case 'e': handleInteractRef.current(); break;
         case 'i': 
-            if (state.mode === GameMode.EXPLORATION) dispatch({ type: 'SET_MODE', payload: GameMode.INVENTORY });
-            else if (state.mode === GameMode.INVENTORY) dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
+            if (currentMode === GameMode.EXPLORATION) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.INVENTORY });
+            else if (currentMode === GameMode.INVENTORY) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
             break;
         case 'c':
-            if (state.mode === GameMode.EXPLORATION) dispatch({ type: 'SET_MODE', payload: GameMode.CHARACTER });
-            else if (state.mode === GameMode.CHARACTER) dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
+            if (currentMode === GameMode.EXPLORATION) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.CHARACTER });
+            else if (currentMode === GameMode.CHARACTER) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
             break;
         case 'q':
-            if (state.mode === GameMode.EXPLORATION) dispatch({ type: 'SET_MODE', payload: GameMode.QUESTS });
-            else if (state.mode === GameMode.QUESTS) dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
+            if (currentMode === GameMode.EXPLORATION) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.QUESTS });
+            else if (currentMode === GameMode.QUESTS) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
             break;
         case 'escape':
-            if (state.mode !== GameMode.EXPLORATION && state.mode !== GameMode.COMBAT) dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
+            if (currentMode !== GameMode.EXPLORATION && currentMode !== GameMode.COMBAT) dispatchRef.current({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
             break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleMove, handleInteract, state.mode, isLoading]);
+  }, [isLoading]); // No other dependencies, event listener is stable!
 
 
   // --- Render ---

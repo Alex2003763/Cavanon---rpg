@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity } from '../types';
 import { ITEMS, BASE_STATS, RACES, CLASSES, SKILLS, ENEMY_TEMPLATES, TILE_ICONS } from '../constants';
 import { calculateStats } from '../utils';
-import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins } from 'lucide-react';
+import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity } from 'lucide-react';
 
 // Helper for rarity styling
 const getRarityBorder = (rarity?: ItemRarity) => {
@@ -306,78 +305,112 @@ export const CharacterSheet: React.FC<{
     const skill = SKILLS[classData?.skillId];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-             <div className="bg-slate-900 border border-amber-700/50 w-full max-w-3xl rounded-lg shadow-2xl flex flex-col overflow-hidden relative">
-                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-                    <h2 className="pixel-font text-amber-500 text-xl">Character Sheet</h2>
-                    <button onClick={onClose} className="text-slate-500 hover:text-white"><X /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+             <div className="bg-slate-900 border border-amber-700/50 w-full max-w-5xl h-full md:h-auto md:max-h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden relative">
+                
+                {/* Header */}
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950 shrink-0">
+                    <h2 className="pixel-font text-amber-500 text-xl flex items-center gap-2">
+                        <Activity size={20} /> Status
+                    </h2>
+                    <button onClick={onClose} className="text-slate-500 hover:text-white bg-slate-800 rounded-full p-2 transition-colors"><X size={18} /></button>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-0 h-full">
-                    {/* Left Column: Profile */}
-                    <div className="p-8 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col gap-6">
-                         <div className="flex items-center gap-4">
-                             <div className="w-20 h-20 bg-slate-800 rounded-full border-2 border-amber-600 flex items-center justify-center">
+                {/* Content Area */}
+                <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
+                    
+                    {/* Left Column: Profile & Vitals */}
+                    <div className="w-full md:w-1/3 bg-slate-950/50 border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-col gap-6 overflow-y-auto">
+                         {/* Avatar & Basics */}
+                         <div className="flex items-center gap-4 pb-4 border-b border-slate-800">
+                             <div className="w-20 h-20 bg-slate-900 rounded-full border-2 border-amber-600/50 shadow-[0_0_15px_rgba(217,119,6,0.2)] flex items-center justify-center shrink-0">
                                  <User size={40} className="text-amber-600" />
                              </div>
                              <div>
-                                 <h3 className="text-2xl font-bold text-white">{player.name}</h3>
-                                 <div className="text-amber-500 font-mono text-sm">Level {player.level} {player.race} {player.class}</div>
+                                 <h3 className="text-2xl font-bold text-white tracking-tight">{player.name}</h3>
+                                 <div className="text-slate-400 font-mono text-xs flex flex-col">
+                                     <span>Level <span className="text-amber-400 font-bold">{player.level}</span></span>
+                                     <span>{player.race} {player.class}</span>
+                                 </div>
                              </div>
                          </div>
                          
-                         <div className="space-y-4">
-                            <StatBar label="Health" value={Math.round(player.hp)} max={derived.maxHp} color="bg-red-600" />
-                            <StatBar label="Mana" value={Math.round(player.mp)} max={derived.maxMp} color="bg-blue-600" />
-                            <StatBar label="Experience" value={player.exp} max={player.maxExp} color="bg-yellow-600" />
+                         {/* Vitals Bars */}
+                         <div className="space-y-4 bg-slate-900 p-4 rounded-lg border border-slate-800 shadow-inner">
+                            <StatBar label="Health" value={Math.round(player.hp)} max={derived.maxHp} color="bg-gradient-to-r from-red-700 to-red-500" />
+                            <StatBar label="Mana" value={Math.round(player.mp)} max={derived.maxMp} color="bg-gradient-to-r from-blue-700 to-blue-500" />
+                            <StatBar label="Experience" value={player.exp} max={player.maxExp} color="bg-gradient-to-r from-amber-700 to-yellow-500" subLabel={`(${Math.round((player.exp/player.maxExp)*100)}%)`} />
                          </div>
 
-                         {/* Passives & Skills Info */}
-                         <div className="bg-slate-950 p-4 rounded border border-slate-800 space-y-3">
-                             <div>
-                                 <div className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
-                                     <Brain size={10} /> Racial Passive
-                                 </div>
-                                 <div className="text-sm text-amber-200 font-bold" title={raceData?.passiveDescription}>{raceData?.passiveName}</div>
-                                 <div className="text-xs text-slate-400">{raceData?.passiveDescription}</div>
-                             </div>
-                             <div className="border-t border-slate-800 pt-2">
-                                 <div className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
-                                     <Zap size={10} /> Class Skill
-                                 </div>
-                                 <div className="text-sm text-cyan-200 font-bold" title={skill?.description}>{skill?.name}</div>
-                                 <div className="text-xs text-slate-400">{skill?.description} (CD: {skill?.cooldown} turns)</div>
+                         {/* Combat Stats Grid */}
+                         <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Evasion</div>
+                                <div className="text-slate-200 font-mono">{derived.evasion.toFixed(1)}%</div>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Crit Chance</div>
+                                <div className="text-slate-200 font-mono">{derived.critChance.toFixed(1)}%</div>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Phys Def</div>
+                                <div className="text-slate-200 font-mono">{derived.physicalDef.toFixed(1)}</div>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Mag Def</div>
+                                <div className="text-slate-200 font-mono">{derived.magicalDef.toFixed(1)}</div>
+                            </div>
+                         </div>
+
+                         {/* Equipment Tiny Summary */}
+                         <div>
+                             <h4 className="text-xs uppercase text-slate-500 font-bold mb-2 tracking-widest">Gear Slots</h4>
+                             <div className="flex gap-2 justify-center bg-slate-900 p-3 rounded border border-slate-800">
+                                 {[EquipmentSlot.MAIN_HAND, EquipmentSlot.OFF_HAND, EquipmentSlot.BODY, EquipmentSlot.HEAD].map(slot => {
+                                     const item = player.equipment[slot];
+                                     return (
+                                         <div key={slot} title={item ? item.name : slot} className={`w-8 h-8 rounded border flex items-center justify-center ${item ? getRarityBorder(item.rarity) + ' bg-slate-800' : 'border-slate-800 bg-slate-950 text-slate-700'}`}>
+                                             <SlotIcon slot={slot} />
+                                         </div>
+                                     )
+                                 })}
                              </div>
                          </div>
                     </div>
 
-                    {/* Right Column: Attributes */}
-                    <div className="p-8 bg-slate-900 flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold text-slate-200 uppercase tracking-wider">Attributes</h3>
+                    {/* Right Column: Attributes & Abilities */}
+                    <div className="flex-1 bg-slate-900 p-6 flex flex-col overflow-y-auto">
+                        
+                        {/* Attributes Header */}
+                        <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-900 z-10 py-2 border-b border-slate-800">
+                            <h3 className="text-lg font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2"><Brain size={18} /> Attributes</h3>
                             {player.attributePoints > 0 && (
-                                <span className="text-amber-400 text-sm font-bold animate-pulse">
-                                    {player.attributePoints} Points Available
+                                <span className="text-amber-950 bg-amber-400 text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.5)]">
+                                    +{player.attributePoints} Available
                                 </span>
                             )}
                         </div>
                         
-                        <div className="space-y-4 flex-1">
+                        {/* Attributes List */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                             {(Object.keys(player.baseStats) as Array<keyof Stats>).map(key => {
                                 const isBuffed = totalStats[key] > player.baseStats[key];
+                                const bonus = totalStats[key] - player.baseStats[key];
                                 return (
-                                    <div key={key} className="flex items-center justify-between p-3 bg-slate-950 rounded border border-slate-800">
+                                    <div key={key} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-lg border border-slate-800 transition-colors hover:border-slate-600 group">
                                         <div className="flex flex-col">
-                                            <span className="text-xs text-slate-500 uppercase tracking-widest">{key}</span>
-                                            <span className={`text-lg font-mono font-bold ${isBuffed ? 'text-green-400' : 'text-slate-200'}`}>
-                                                {totalStats[key]}
-                                                {isBuffed && <span className="text-xs ml-1 text-slate-600">({player.baseStats[key]} + {totalStats[key] - player.baseStats[key]})</span>}
-                                            </span>
+                                            <span className="text-[10px] text-slate-500 uppercase tracking-widest group-hover:text-slate-400">{key}</span>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className={`text-xl font-mono font-bold ${isBuffed ? 'text-green-400' : 'text-slate-200'}`}>
+                                                    {totalStats[key]}
+                                                </span>
+                                                {isBuffed && <span className="text-xs text-green-600/80 font-mono">(+{bonus})</span>}
+                                            </div>
                                         </div>
                                         {player.attributePoints > 0 && (
                                             <button 
                                                 onClick={() => onAllocate(key)}
-                                                className="w-8 h-8 flex items-center justify-center bg-amber-900/50 text-amber-400 border border-amber-700 rounded hover:bg-amber-700 hover:text-white transition-colors"
+                                                className="w-10 h-10 flex items-center justify-center bg-amber-900/20 text-amber-500 border border-amber-900/50 rounded-lg hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all active:scale-95 shadow-sm"
                                             >
                                                 +
                                             </button>
@@ -386,17 +419,32 @@ export const CharacterSheet: React.FC<{
                                 );
                             })}
                         </div>
-                        
-                        <div className="mt-6 pt-4 border-t border-slate-800 grid grid-cols-2 gap-4 text-xs font-mono text-slate-400">
-                            <div className="flex justify-between"><span>Evasion</span> <span className="text-white">{derived.evasion.toFixed(1)}%</span></div>
-                            <div className="flex justify-between"><span>Crit</span> <span className="text-white">{derived.critChance.toFixed(1)}%</span></div>
-                            <div className="flex justify-between"><span>P.Def</span> <span className="text-white">{derived.physicalDef.toFixed(1)}</span></div>
-                            <div className="flex justify-between"><span>M.Def</span> <span className="text-white">{derived.magicalDef.toFixed(1)}</span></div>
-                            <div className="flex justify-between col-span-2 border-t border-slate-800 pt-2 mt-2">
-                                <span className="text-green-400">HP Regen: {derived.hpRegen}/hr</span>
-                                <span className="text-blue-400">MP Regen: {derived.mpRegen}/hr</span>
+
+                        {/* Passives & Skills */}
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">Abilities</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="bg-slate-950 p-4 rounded border border-slate-800 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-2 opacity-10"><User size={40} /></div>
+                                    <div className="text-[10px] uppercase text-amber-600 font-bold tracking-wider mb-1">Racial Trait</div>
+                                    <div className="text-sm text-amber-100 font-bold mb-1">{raceData?.passiveName}</div>
+                                    <div className="text-xs text-slate-400 leading-relaxed">{raceData?.passiveDescription}</div>
+                                </div>
+                                <div className="bg-slate-950 p-4 rounded border border-slate-800 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-2 opacity-10"><Zap size={40} /></div>
+                                    <div className="text-[10px] uppercase text-cyan-600 font-bold tracking-wider mb-1">Class Skill</div>
+                                    <div className="text-sm text-cyan-100 font-bold mb-1">{skill?.name}</div>
+                                    <div className="text-xs text-slate-400 leading-relaxed">{skill?.description} <span className="text-slate-500 block mt-1">(Cooldown: {skill?.cooldown} turns)</span></div>
+                                </div>
                             </div>
                         </div>
+                        
+                         {/* Regen Rates */}
+                        <div className="mt-8 pt-4 border-t border-slate-800 flex justify-around text-xs font-mono">
+                            <div className="text-green-400 flex items-center gap-2"><Heart size={12} /> Regen: +{derived.hpRegen}/hr</div>
+                            <div className="text-blue-400 flex items-center gap-2"><Zap size={12} /> Regen: +{derived.mpRegen}/hr</div>
+                        </div>
+
                     </div>
                 </div>
              </div>

@@ -1,4 +1,3 @@
-
 import React, { memo, useMemo } from 'react';
 import { Tile, TileType, Player, InteractableType, NPC } from '../types';
 import { TILE_COLORS, TILE_ICONS } from '../constants';
@@ -25,19 +24,17 @@ const NpcIcon = ({ role, id }: { role: string, id: string }) => {
 };
 
 // Renders a single visual tile
-// Optimized: Replaced `npcs` array prop with specific `npcData` object to improve reference stability in memo
+// Optimized: Props simplified to ensure strict equality checks pass more often
 const MapTile = memo(({ 
   tile,
   isPlayer, 
   isExplored, 
-  opacity,
   isVoid,
   npcData
 }: { 
   tile: Tile,
   isPlayer: boolean, 
   isExplored: boolean, 
-  opacity: number,
   isVoid: boolean,
   npcData?: { id: string; role: string }
 }) => {
@@ -47,19 +44,21 @@ const MapTile = memo(({
   
   const isLandmark = [TileType.TOWN, TileType.DUNGEON, TileType.RUINS, TileType.PORTAL].includes(type);
 
-  const bgColor = isVoid ? 'bg-black' : (isExplored ? TILE_COLORS[type] : 'bg-slate-950');
-  const borderColor = !isExplored && !isVoid ? 'border-slate-900/20' : (isLandmark ? 'border-white/30' : 'border-slate-950/10');
+  // Pre-calculate static classes
+  const baseClasses = "aspect-square flex items-center justify-center relative gpu-accelerate border";
+  const bgClass = isVoid ? 'bg-black' : (isExplored ? TILE_COLORS[type] : 'bg-slate-950');
+  const borderClass = !isExplored && !isVoid ? 'border-slate-900/20' : (isLandmark ? 'border-white/30' : 'border-slate-950/10');
+  const playerClasses = isPlayer ? 'ring-2 ring-yellow-400 z-30 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : '';
+  const landmarkClasses = isLandmark && isExplored ? 'ring-1 ring-white/20 z-10' : '';
+  
+  // Render unexplored tiles as darker (0.1 opacity equivalent) via style color if needed, or just handle via class
+  // We use style for opacity only for unexplored to avoid passing changing opacity values
+  const style = !isExplored && !isVoid ? { opacity: 0.1 } : undefined;
 
   return (
     <div
-      className={`
-        aspect-square flex items-center justify-center relative
-        ${bgColor} border ${borderColor}
-        ${isPlayer ? 'ring-2 ring-yellow-400 z-30 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : ''}
-        ${isLandmark && isExplored ? 'ring-1 ring-white/20 z-10' : ''}
-        gpu-accelerate
-      `}
-      style={{ opacity: isVoid ? 1 : (isExplored ? opacity : 0.1) }}
+      className={`${baseClasses} ${bgClass} ${borderClass} ${playerClasses} ${landmarkClasses}`}
+      style={style}
     >
       {isExplored && !isVoid && (
         <span className={`font-mono font-bold drop-shadow-sm select-none flex items-center justify-center text-[10px] sm:text-sm lg:text-base ${isLandmark ? 'text-white scale-110' : 'text-white/80'}`}>
@@ -87,13 +86,11 @@ const MapTile = memo(({
     </div>
   );
 }, (prev, next) => {
-  // Strict comparison optimization
   return (
-    prev.tile === next.tile && // Tile objects are referentially stable from reducer unless changed
-    prev.npcData?.id === next.npcData?.id && // Check NPC ID equality
+    prev.tile === next.tile && 
+    prev.npcData?.id === next.npcData?.id &&
     prev.isPlayer === next.isPlayer &&
     prev.isExplored === next.isExplored &&
-    prev.opacity === next.opacity &&
     prev.isVoid === next.isVoid
   );
 });
@@ -105,7 +102,6 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
   const npcLookup = useMemo(() => {
     const map = new Map<string, { id: string, role: string }>();
     npcs.forEach(npc => {
-        // We key by specific tile location if possible, but since NPCs move, we usually lookup by ID stored in tile
         map.set(npc.id, { id: npc.id, role: npc.role });
     });
     return map;
@@ -129,11 +125,9 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
         if (mapX >= 0 && mapX < width && mapY >= 0 && mapY < height) {
             const tile = tiles[mapY][mapX];
             let npcData = undefined;
-            // Resolve NPC data immediately during grid construction
             if (tile.npcs.length > 0) {
                 const npcId = tile.npcs[0];
                 npcData = npcLookup.get(npcId);
-                // Fallback if lookup failed but ID exists (shouldn't happen if props are synced)
                 if (!npcData) npcData = { id: npcId, role: 'Unknown' }; 
             }
             
@@ -157,7 +151,16 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
   }, [player.position.x, player.position.y, tiles, width, height, viewRadius, npcLookup]);
 
   return (
-    <div className="relative bg-slate-950 rounded-lg border-2 border-slate-700 shadow-2xl overflow-hidden h-[70vh] w-[70vh] md:h-[85vh] md:w-[85vh] mx-auto flex items-center justify-center p-1 gpu-accelerate strict-contain transition-all duration-300">
+    <div className="relative bg-slate-950 rounded-lg border-2 border-slate-700 shadow-2xl overflow-hidden h-[70vh] w-[70vh] md:h-[85vh] md:w-[85vh] mx-auto flex items-center justify-center p-1 gpu-accelerate strict-contain transition-all duration-300 group">
+      {/* Vignette Overlay for Fog/Atmosphere - GPU accelerated mask */}
+      <div 
+         className="absolute inset-0 z-10 pointer-events-none"
+         style={{
+             background: 'radial-gradient(circle, transparent 30%, rgba(2, 6, 23, 0.4) 70%, rgba(2, 6, 23, 0.9) 100%)',
+             boxShadow: 'inset 0 0 100px rgba(0,0,0,0.9)'
+         }}
+      ></div>
+
       <div 
         className="grid gap-[1px] bg-slate-900 w-full h-full"
         style={{ 
@@ -168,17 +171,12 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
           row.map((cell, vx) => {
             const isPlayerHere = vy === viewRadius && vx === viewRadius;
             
-            // Distance from center (player) for opacity/fog
-            const dist = Math.abs(vx - viewRadius) + Math.abs(vy - viewRadius);
-            const opacity = isPlayerHere ? 1 : Math.max(0.2, 1 - dist * 0.1);
-
             return (
               <MapTile
                 key={`${cell.tile.x}-${cell.tile.y}`}
                 tile={cell.tile}
                 isPlayer={isPlayerHere}
                 isExplored={cell.tile.explored}
-                opacity={opacity}
                 isVoid={cell.isVoid}
                 npcData={cell.npcData}
               />
@@ -187,7 +185,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
         ))}
       </div>
       
-      <div className="absolute bottom-2 right-2 text-[10px] text-slate-600 font-mono bg-black/50 px-2 rounded pointer-events-none backdrop-blur-md">
+      <div className="absolute bottom-2 right-2 text-[10px] text-slate-600 font-mono bg-black/50 px-2 rounded pointer-events-none backdrop-blur-md z-20">
         {player.position.x}, {player.position.y}
       </div>
     </div>
