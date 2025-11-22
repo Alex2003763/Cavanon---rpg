@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity, GameState } from '../types';
+import { Player, EquipmentSlot, Item, Stats, GameMode, TileType, Quest, QuestStatus, QuestType, ItemRarity, GameState, GameSettings } from '../types';
 import { ITEMS, BASE_STATS, RACES, CLASSES, SKILLS, ENEMY_TEMPLATES, TILE_ICONS } from '../constants';
 import { calculateStats, formatDate, formatTime } from '../utils';
-import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity, RefreshCw, Disc, FileText, LogOut, MousePointer2, Backpack } from 'lucide-react';
+import { Shield, Sword, Footprints, Brain, Zap, Heart, Star, X, Trash2, Shirt, Save, Upload, User, ArrowLeftRight, Package, Info, BookOpen, Scroll, Store, Check, Coins, Activity, RefreshCw, Disc, FileText, LogOut, MousePointer2, Backpack, Volume2, Sliders, Grid, Skull } from 'lucide-react';
 
 // Helper for rarity styling
 const getRarityBorder = (rarity?: ItemRarity) => {
@@ -765,22 +765,82 @@ export const SettingsModal: React.FC<{
     onClose: () => void;
     onLoadGame: () => void;
     isMainMenu?: boolean;
-}> = ({ onClose, onLoadGame, isMainMenu }) => (
+    settings?: GameSettings;
+    onUpdate?: (settings: Partial<GameSettings>) => void;
+}> = ({ onClose, onLoadGame, isMainMenu, settings, onUpdate }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
     <div className="bg-slate-900 border border-slate-600 p-6 w-full max-w-sm rounded shadow-2xl">
-      <h3 className="pixel-font text-lg text-slate-200 mb-4">System Menu</h3>
-      <div className="space-y-4 mb-6">
-        <div className="flex justify-between items-center">
-          <span className="text-slate-400">Text Speed</span>
-          <select className="bg-slate-950 border border-slate-700 text-slate-200 p-1 text-xs rounded">
-            <option>Normal</option>
-            <option>Fast</option>
-            <option>Instant</option>
-          </select>
+      <h3 className="pixel-font text-lg text-slate-200 mb-6 border-b border-slate-700 pb-2">System Settings</h3>
+      
+      <div className="space-y-6 mb-6">
+        {/* Text Speed */}
+        <div>
+            <div className="flex justify-between items-center mb-1">
+                <span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2"><FileText size={14} /> Text Speed</span>
+            </div>
+            <select 
+                value={settings?.textSpeed}
+                onChange={(e) => onUpdate && onUpdate({ textSpeed: e.target.value as any })}
+                className="w-full bg-slate-950 border border-slate-700 text-slate-200 p-2 text-xs rounded focus:border-amber-500 focus:outline-none"
+            >
+                <option value="SLOW">Slow</option>
+                <option value="NORMAL">Normal</option>
+                <option value="FAST">Fast</option>
+                <option value="INSTANT">Instant</option>
+            </select>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-slate-400">Music Volume</span>
-           <span className="text-slate-600 text-xs italic">Off</span>
+
+        {/* Volume Controls */}
+        <div className="space-y-3">
+             <div className="text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-slate-800 pb-1">Audio</div>
+             {[
+                 { label: 'Master Volume', key: 'masterVolume' },
+                 { label: 'Music', key: 'musicVolume' },
+                 { label: 'Sound Effects', key: 'sfxVolume' }
+             ].map((vol) => (
+                 <div key={vol.key} className="space-y-1">
+                     <div className="flex justify-between text-xs text-slate-400">
+                         <span>{vol.label}</span>
+                         <span>{settings ? (settings as any)[vol.key] : 50}%</span>
+                     </div>
+                     <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={settings ? (settings as any)[vol.key] : 50}
+                        onChange={(e) => onUpdate && onUpdate({ [vol.key]: parseInt(e.target.value) })}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                     />
+                 </div>
+             ))}
+        </div>
+
+        {/* Gameplay Toggles */}
+        <div className="space-y-3">
+             <div className="text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-slate-800 pb-1">Gameplay</div>
+             
+             <div className="flex items-center justify-between">
+                 <span className="text-slate-400 text-xs flex items-center gap-2"><Skull size={14}/> Difficulty</span>
+                 <select 
+                    value={settings?.difficulty}
+                    onChange={(e) => onUpdate && onUpdate({ difficulty: e.target.value as any })}
+                    className="bg-slate-950 border border-slate-700 text-slate-200 p-1 text-xs rounded"
+                 >
+                     <option value="EASY">Easy</option>
+                     <option value="NORMAL">Normal</option>
+                     <option value="HARD">Hard</option>
+                 </select>
+             </div>
+
+             <div className="flex items-center justify-between">
+                 <span className="text-slate-400 text-xs flex items-center gap-2"><Grid size={14}/> Show Grid Lines</span>
+                 <button 
+                    onClick={() => onUpdate && onUpdate({ showGrid: !settings?.showGrid })}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${settings?.showGrid ? 'bg-amber-600' : 'bg-slate-700'}`}
+                 >
+                     <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings?.showGrid ? 'left-6' : 'left-1'}`}></div>
+                 </button>
+             </div>
         </div>
 
         <div className="border-t border-slate-800 pt-4 space-y-2">

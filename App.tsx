@@ -68,7 +68,14 @@ const initialState: GameState = {
   logs: [{ id: 'init', timestamp: '00:00', text: 'Welcome to Cavanon.', type: 'SYSTEM' }],
   activeInteraction: null,
   combat: null,
-  settings: { textSpeed: 'NORMAL' }
+  settings: { 
+      textSpeed: 'NORMAL',
+      masterVolume: 50,
+      musicVolume: 50,
+      sfxVolume: 50,
+      difficulty: 'NORMAL',
+      showGrid: true
+  }
 };
 
 // --- Reducer ---
@@ -133,8 +140,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { 
         ...state, 
         mode: action.payload, 
-        previousMode: (state.mode === GameMode.EXPLORATION || state.mode === GameMode.MENU || state.mode === GameMode.SETTINGS) ? state.mode : state.previousMode 
+        // Don't track SETTINGS as a previous mode to return to; return to what was before it.
+        previousMode: (state.mode === GameMode.EXPLORATION || state.mode === GameMode.MENU) ? state.mode : state.previousMode 
       };
+    case 'UPDATE_SETTINGS':
+        return {
+            ...state,
+            settings: { ...state.settings, ...action.payload }
+        };
     case 'PLAYER_STEP': {
       const currentMap = state.maps[state.currentMapId];
       const { x, y } = action.payload;
@@ -895,12 +908,15 @@ const App = () => {
 
   // --- Rendering ---
 
-  if (state.mode === GameMode.MENU) {
+  const isMenuContext = state.mode === GameMode.MENU || 
+    ((state.mode === GameMode.SETTINGS || state.mode === GameMode.LOAD) && state.previousMode === GameMode.MENU);
+
+  if (isMenuContext) {
       return (
           <div className="h-full w-full bg-slate-950 flex items-center justify-center relative overflow-hidden">
-              {/* Animated Background */}
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20 animate-pulse"></div>
-              <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 to-slate-950 z-0"></div>
+              {/* High Quality Fantasy Background */}
+              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?q=80&w=2544&auto=format&fit=crop')] bg-cover bg-center opacity-40 animate-pulse-slow"></div>
+              <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-900/60 to-slate-950 z-0"></div>
               
               {/* Main Container */}
               <div className="relative z-10 flex flex-col items-center gap-10 animate-in zoom-in duration-700">
@@ -915,50 +931,92 @@ const App = () => {
                           <Sword size={40} className="text-amber-600 animate-bounce-slow rotate-180 scale-x-[-1]" />
                       </div>
                       <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-amber-700 to-transparent mb-2"></div>
-                      <p className="text-slate-500 font-serif italic tracking-widest text-sm">INFINITE GRID RPG</p>
+                      <p className="text-slate-400 font-serif italic tracking-widest text-sm drop-shadow-md">INFINITE GRID RPG</p>
                   </div>
 
                   {/* Menu Options */}
                   <div className="flex flex-col gap-4 w-80">
                       <button 
                           onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CREATION })} 
-                          className="group relative bg-slate-900 border border-amber-900/50 hover:border-amber-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                          className="group relative bg-slate-900/80 backdrop-blur-sm border border-amber-900/50 hover:border-amber-500 p-4 rounded transition-all duration-300 hover:bg-slate-800/90 overflow-hidden shadow-lg"
                       >
-                          <div className="absolute inset-0 bg-amber-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="absolute inset-0 bg-amber-500/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
                           <div className="flex items-center justify-between relative z-10">
                               <span className="pixel-font text-lg text-amber-100 group-hover:text-amber-400 transition-colors">New Game</span>
-                              <Map className="text-slate-600 group-hover:text-amber-500" size={20} />
+                              <Map className="text-slate-500 group-hover:text-amber-500" size={20} />
                           </div>
                       </button>
 
                       <button 
                           onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })} 
-                          className="group relative bg-slate-900 border border-slate-800 hover:border-cyan-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                          className="group relative bg-slate-900/80 backdrop-blur-sm border border-slate-800 hover:border-cyan-500 p-4 rounded transition-all duration-300 hover:bg-slate-800/90 overflow-hidden shadow-lg"
                       >
-                          <div className="absolute inset-0 bg-cyan-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="absolute inset-0 bg-cyan-500/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
                           <div className="flex items-center justify-between relative z-10">
                               <span className="pixel-font text-lg text-slate-300 group-hover:text-cyan-400 transition-colors">Load Game</span>
-                              <Save className="text-slate-600 group-hover:text-cyan-500" size={20} />
+                              <Save className="text-slate-500 group-hover:text-cyan-500" size={20} />
+                          </div>
+                      </button>
+
+                      <button 
+                          onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SETTINGS })} 
+                          className="group relative bg-slate-900/80 backdrop-blur-sm border border-slate-800 hover:border-slate-400 p-4 rounded transition-all duration-300 hover:bg-slate-800/90 overflow-hidden shadow-lg"
+                      >
+                          <div className="absolute inset-0 bg-slate-500/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="flex items-center justify-between relative z-10">
+                              <span className="pixel-font text-lg text-slate-300 group-hover:text-white transition-colors">Settings</span>
+                              <Settings className="text-slate-500 group-hover:text-white" size={20} />
                           </div>
                       </button>
 
                       <button 
                           onClick={() => setShowBestiary(true)} 
-                          className="group relative bg-slate-900 border border-slate-800 hover:border-red-500 p-4 rounded transition-all duration-300 hover:bg-slate-800 overflow-hidden"
+                          className="group relative bg-slate-900/80 backdrop-blur-sm border border-slate-800 hover:border-red-500 p-4 rounded transition-all duration-300 hover:bg-slate-800/90 overflow-hidden shadow-lg"
                       >
-                          <div className="absolute inset-0 bg-red-500/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
+                          <div className="absolute inset-0 bg-red-500/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
                           <div className="flex items-center justify-between relative z-10">
                               <span className="pixel-font text-lg text-slate-300 group-hover:text-red-400 transition-colors">Bestiary</span>
-                              <BookOpen className="text-slate-600 group-hover:text-red-500" size={20} />
+                              <BookOpen className="text-slate-500 group-hover:text-red-500" size={20} />
                           </div>
                       </button>
                   </div>
                   
                   {/* Footer */}
-                  <div className="text-slate-700 text-xs font-mono">v1.2.0 • Early Access Build</div>
+                  <div className="text-slate-500 text-xs font-mono bg-slate-950/50 px-2 py-1 rounded">v1.3.0 • Early Access Build</div>
               </div>
 
               {showBestiary && <BestiaryModal onClose={() => setShowBestiary(false)} />}
+              
+              {/* Render Settings Modal on top of menu if active */}
+              {state.mode === GameMode.SETTINGS && (
+                  <SettingsModal 
+                      onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })}
+                      onLoadGame={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })}
+                      isMainMenu={true}
+                      settings={state.settings}
+                      onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
+                  />
+              )}
+              
+              {/* Render Load Modal on top of menu if active */}
+              {state.mode === GameMode.LOAD && (
+                  <SaveLoadModal 
+                      mode="LOAD"
+                      onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })}
+                      onAction={(slot) => dispatch({ type: 'LOAD_GAME', payload: slot })}
+                  />
+              )}
+
+              {/* Render Settings Modal on top of menu if active */}
+              {state.mode === GameMode.SETTINGS && (
+                  <SettingsModal 
+                      onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })}
+                      onLoadGame={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })}
+                      isMainMenu={true}
+                      settings={state.settings}
+                      onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
+                  />
+              )}
           </div>
       );
   }
@@ -996,6 +1054,11 @@ const App = () => {
               <div className="relative p-1 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
                  <div className="absolute -inset-1 bg-gradient-to-br from-slate-800 to-slate-950 rounded-xl -z-10"></div>
                  <WorldMap mapData={currentMap} player={state.player} npcs={state.npcs} />
+                 
+                 {/* Grid Overlay based on Settings */}
+                 {state.settings.showGrid && (
+                     <div className="absolute inset-0 pointer-events-none z-20 opacity-10 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVQoU2NkYGD4z4AEmBjoIgQAgb4AA90eOuwAAAAASUVORK5CYII=')]"></div>
+                 )}
               </div>
               
               {/* Time/Weather Overlay (Detailed View) */}
@@ -1121,6 +1184,8 @@ const App = () => {
               <SettingsModal 
                   onClose={() => dispatch({ type: 'SET_MODE', payload: state.previousMode || GameMode.EXPLORATION })}
                   onLoadGame={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })}
+                  settings={state.settings}
+                  onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
               />
           )}
 

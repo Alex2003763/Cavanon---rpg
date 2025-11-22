@@ -267,6 +267,11 @@ export interface LogEntry {
 
 export interface GameSettings {
   textSpeed: 'SLOW' | 'NORMAL' | 'FAST' | 'INSTANT';
+  masterVolume: number;
+  musicVolume: number;
+  sfxVolume: number;
+  difficulty: 'EASY' | 'NORMAL' | 'HARD';
+  showGrid: boolean;
 }
 
 export interface Enemy {
@@ -352,4 +357,5 @@ export type Action =
   | { type: 'RESTOCK_SHOP'; payload: string }
   | { type: 'BUY_ITEM'; payload: Item }
   | { type: 'SELL_ITEM'; payload: Item }
-  | { type: 'SEARCH_AREA' };
+  | { type: 'SEARCH_AREA' }
+  | { type: 'UPDATE_SETTINGS'; payload: Partial<GameSettings> };
