@@ -9,14 +9,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&display=swap');
+      
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
       body {
         font-family: 'JetBrains Mono', monospace;
         background-color: #0f172a;
         color: #e2e8f0;
         overflow: hidden;
-        /* Force GPU rasterization for the whole app context */
-        transform: translateZ(0); 
       }
+      
       .pixel-font {
         font-family: 'Press Start 2P', cursive;
       }

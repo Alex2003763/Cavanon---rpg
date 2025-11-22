@@ -967,7 +967,7 @@ const App: React.FC = () => {
 
   if (state.mode === GameMode.MENU || (state.mode === GameMode.SETTINGS && !state.previousMode)) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200 relative overflow-hidden font-sans selection:bg-amber-500/30">
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 text-slate-200 relative overflow-hidden font-sans selection:bg-amber-500/30">
         
         {/* CSS-Only Background Implementation */}
         <div className="absolute inset-0 bg-[#020617] z-0">
@@ -1050,7 +1050,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen bg-slate-950 flex flex-col text-slate-200 overflow-hidden font-sans selection:bg-amber-500/30">
+    <div className="h-full w-full bg-slate-950 flex flex-col text-slate-200 overflow-hidden font-sans selection:bg-amber-500/30">
       
       {/* Header / HUD */}
       <div className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shadow-md z-10 shrink-0">
