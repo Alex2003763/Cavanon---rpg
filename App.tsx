@@ -1,11 +1,10 @@
-
 import React, { useReducer, useEffect, useState, useRef } from 'react';
-import WorldMap from './components/WorldMap';
+import WorldMap, { FullMap } from './components/WorldMap';
 import { Panel, Button, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface, SaveLoadModal } from './components/UIComponents';
 import GameLog from './components/GameLog';
 import CombatView from './components/CombatView';
 import { 
-  GameState, GameMode, TileType, Weather, TimeOfDay, Player, LogEntry, NPC, EquipmentSlot, Item, Stats, BattleSpeed, Enemy, CombatState, InteractableType, QuestStatus, QuestType, Action 
+  GameState, GameMode, TileType, Weather, TimeOfDay, Player, LogEntry, NPC, EquipmentSlot, Item, Stats, BattleSpeed, Enemy, CombatState, InteractableType, QuestStatus, QuestType, Action, AutoSaveFrequency, GameDate 
 } from './types';
 import { 
   BASE_STATS, WEATHER_ICONS, NPC_TEMPLATES, DIALOGUE_TREE, ITEMS, generateVillage, generateWorldMap, generatePlayerHome, generateCity
@@ -51,7 +50,7 @@ const initialState: GameState = {
     skills: [],
     quests: [],
     completedQuestIds: [],
-    statusEffects: [{ id: 'blessing', type: 'REGEN', name: 'Blessing', duration: 20, value: 2 }]
+    statusEffects: []
   },
   npcs: NPC_TEMPLATES,
   currentMapId: 'starter_village',
@@ -70,12 +69,23 @@ const initialState: GameState = {
   combat: null,
   settings: { 
       textSpeed: 'NORMAL',
-      masterVolume: 50,
-      musicVolume: 50,
-      sfxVolume: 50,
-      difficulty: 'NORMAL',
-      showGrid: true
+      autoSaveFrequency: AutoSaveFrequency.EVENTS
   }
+};
+
+// --- Helper for Auto Save Check ---
+const checkAutoSave = (oldDate: GameDate, newDate: GameDate, frequency: AutoSaveFrequency, isEvent: boolean) => {
+    switch (frequency) {
+        case AutoSaveFrequency.OFF: return false;
+        case AutoSaveFrequency.EVENTS: return isEvent;
+        case AutoSaveFrequency.HOURLY: return oldDate.hour !== newDate.hour || oldDate.day !== newDate.day;
+        case AutoSaveFrequency.DAILY: return oldDate.day !== newDate.day || oldDate.month !== newDate.month;
+        case AutoSaveFrequency.WEEKLY: 
+            const oldWeek = Math.floor(calculateTotalDays(oldDate) / 7);
+            const newWeek = Math.floor(calculateTotalDays(newDate) / 7);
+            return oldWeek !== newWeek;
+        default: return false;
+    }
 };
 
 // --- Reducer ---
@@ -124,13 +134,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'LOAD_GAME': {
          try {
             const slot = action.payload;
-            const saved = localStorage.getItem(`cavanon_save_${slot}`);
+            const key = slot === 0 ? 'cavanon_autosave' : `cavanon_save_${slot}`;
+            const saved = localStorage.getItem(key);
             if (saved) {
                 const loadedState = JSON.parse(saved);
                 return { 
                     ...loadedState, 
                     mode: GameMode.EXPLORATION, 
-                    logs: [...loadedState.logs, { id: Date.now().toString(), timestamp: formatTime(loadedState.date), text: "Game Loaded.", type: 'SYSTEM' }] 
+                    logs: [...loadedState.logs, { id: Date.now().toString(), timestamp: formatTime(loadedState.date), text: slot === 0 ? "Auto Save Loaded." : "Game Loaded.", type: 'SYSTEM' }] 
                 };
             }
         } catch (e) {}
@@ -151,6 +162,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'PLAYER_STEP': {
       const currentMap = state.maps[state.currentMapId];
       const { x, y } = action.payload;
+      const oldDate = state.date;
       
       // 1. Map Updates (Optimized)
       let newMaps = state.maps;
@@ -162,13 +174,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       }
 
       // 2. Time Updates
-      const addedMinutes = 5;
+      // Base cost: 1 min for small maps, 5 mins for world map
+      let addedMinutes = state.currentMapId === 'world_map' ? 5 : 1;
+      
+      // Terrain penalty: Mountain and Water cost 10 mins
+      const targetTile = currentMap.tiles[y][x];
+      if (targetTile.type === TileType.MOUNTAIN || targetTile.type === TileType.WATER) {
+          addedMinutes = 10;
+      }
+      
       let { year, month, day, hour, minute } = state.date;
       minute += addedMinutes;
       while (minute >= 60) { minute -= 60; hour++; }
       while (hour >= 24) { hour -= 24; day++; }
       while (day > 30) { day -= 30; month++; }
       while (month > 12) { month -= 12; year++; }
+
+      const newDate = { year, month, day, hour, minute };
 
       let timeOfDay = TimeOfDay.NIGHT;
       if (hour >= 5 && hour < 9) timeOfDay = TimeOfDay.DAWN;
@@ -182,12 +204,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const newHp = Math.min(derived.maxHp, state.player.hp + hpRecovered);
       const newMp = Math.min(derived.maxMp, state.player.mp + mpRecovered);
 
-      // 4. Encounter Check (Movement has very low chance)
+      // 4. Encounter Check (Only on World Map)
       const tile = currentMap.tiles[y][x];
       let nextMode = state.mode;
       let nextCombat = state.combat;
+      const isWorldMap = state.currentMapId === 'world_map';
       
-      if ([TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS, TileType.WATER].includes(tile.type)) {
+      if (isWorldMap && [TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS, TileType.WATER].includes(tile.type)) {
            if (Math.random() < 0.03) { // 3% chance on step
                const enemy = generateEnemy(tile.type, state.player.level);
                nextMode = GameMode.COMBAT;
@@ -203,17 +226,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
            }
       }
 
-      return {
+      const newState = {
         ...state,
         player: { ...state.player, position: { x, y }, hp: newHp, mp: newMp },
         maps: newMaps,
-        date: { year, month, day, hour, minute },
+        date: newDate,
         timeOfDay,
         mode: nextMode,
         combat: nextCombat
       };
+
+      // Auto Save Check
+      if (checkAutoSave(oldDate, newDate, state.settings.autoSaveFrequency, false)) {
+          try {
+             localStorage.setItem('cavanon_autosave', JSON.stringify({ ...newState, mode: GameMode.EXPLORATION }));
+             newState.logs = [...newState.logs, { id: Date.now().toString(), timestamp: formatTime(newState.date), text: "Auto Saved.", type: 'SYSTEM' }];
+          } catch(e) {}
+      }
+
+      return newState;
     }
     case 'SEARCH_AREA': {
+        const oldDate = state.date;
         // 1. Time Updates (Searching takes 30 mins)
         const addedMinutes = 30;
         let { year, month, day, hour, minute } = state.date;
@@ -222,6 +256,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         while (hour >= 24) { hour -= 24; day++; }
         while (day > 30) { day -= 30; month++; }
         while (month > 12) { month -= 12; year++; }
+
+        const newDate = { year, month, day, hour, minute };
 
         let timeOfDay = TimeOfDay.NIGHT;
         if (hour >= 5 && hour < 9) timeOfDay = TimeOfDay.DAWN;
@@ -245,12 +281,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         let newLogs = [...state.logs];
         let newInventory = [...state.player.inventory];
 
-        // Can only find things in wild areas
+        // Can only find things in wild areas on World Map mostly, but allow local map foraging
         const isWild = [TileType.GRASS, TileType.FOREST, TileType.MOUNTAIN, TileType.DUNGEON, TileType.RUINS, TileType.WATER].includes(tile.type);
 
         if (isWild) {
-            if (roll < 0.35) { 
-                // 35% Encounter
+            // Check world map for encounter restriction
+            const isWorldMap = state.currentMapId === 'world_map';
+            if (roll < 0.35 && isWorldMap) { 
+                // 35% Encounter (Only on world map)
                 const enemy = generateEnemy(tile.type, state.player.level);
                 nextMode = GameMode.COMBAT;
                 nextCombat = {
@@ -300,18 +338,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             });
         }
 
-        return {
+        const newState = {
             ...state,
             player: { ...state.player, hp: newHp, mp: newMp, inventory: newInventory },
-            date: { year, month, day, hour, minute },
+            date: newDate,
             timeOfDay,
             mode: nextMode,
             combat: nextCombat,
             logs: newLogs
         };
+
+        // Auto Save Check
+        if (checkAutoSave(oldDate, newDate, state.settings.autoSaveFrequency, false)) {
+            try {
+                localStorage.setItem('cavanon_autosave', JSON.stringify({ ...newState, mode: GameMode.EXPLORATION }));
+                newState.logs = [...newState.logs, { id: Date.now().toString(), timestamp: formatTime(newState.date), text: "Auto Saved.", type: 'SYSTEM' }];
+            } catch(e) {}
+        }
+
+        return newState;
     }
-    case 'SWITCH_MAP':
-      return {
+    case 'SWITCH_MAP': {
+      const newState = {
         ...state,
         currentMapId: action.payload.mapId,
         player: { ...state.player, position: { x: action.payload.x, y: action.payload.y } },
@@ -319,9 +367,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           id: Date.now().toString(),
           timestamp: formatTime(state.date),
           text: `Traveled to ${state.maps[action.payload.mapId].name}.`,
-          type: 'INFO'
+          type: 'INFO' as const
         }]
       };
+
+      if (checkAutoSave(state.date, state.date, state.settings.autoSaveFrequency, true)) {
+          try {
+             const saveState = { ...newState, mode: GameMode.EXPLORATION };
+             localStorage.setItem('cavanon_autosave', JSON.stringify(saveState));
+             newState.logs = [...newState.logs, { id: Date.now().toString(), timestamp: formatTime(newState.date), text: "Auto Saved.", type: 'SYSTEM' }];
+          } catch(e) {}
+      }
+
+      return newState;
+    }
     case 'ADD_LOG':
       return {
         ...state,
@@ -469,6 +528,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         };
     }
     case 'REST': {
+        const oldDate = state.date;
         const addedMinutes = 480;
         const { derived } = calculateStats(state.player);
         
@@ -479,18 +539,29 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         while (day > 30) { day -= 30; month++; }
         while (month > 12) { month -= 12; year++; }
 
+        const newDate = { year, month, day, hour, minute };
+
         let timeOfDay = TimeOfDay.NIGHT;
         if (hour >= 5 && hour < 9) timeOfDay = TimeOfDay.DAWN;
         else if (hour >= 9 && hour < 18) timeOfDay = TimeOfDay.DAY;
         else if (hour >= 18 && hour < 21) timeOfDay = TimeOfDay.DUSK;
 
-        return {
+        const newState = {
             ...state,
-            date: { year, month, day, hour, minute },
+            date: newDate,
             timeOfDay,
             player: { ...state.player, hp: derived.maxHp, mp: derived.maxMp },
-            logs: [...state.logs, { id: Date.now().toString(), timestamp: formatTime(state.date), text: "You slept soundly and feel completely refreshed.", type: 'NARRATIVE' }]
+            logs: [...state.logs, { id: Date.now().toString(), timestamp: formatTime(state.date), text: "You slept soundly and feel completely refreshed.", type: 'NARRATIVE' as const }]
         };
+        
+        // Rest counts as an event and time passing
+        if (checkAutoSave(oldDate, newDate, state.settings.autoSaveFrequency, true)) {
+             try {
+                 localStorage.setItem('cavanon_autosave', JSON.stringify(newState));
+                 newState.logs = [...newState.logs, { id: Date.now().toString(), timestamp: formatTime(newState.date), text: "Auto Saved.", type: 'SYSTEM' }];
+             } catch(e) {}
+        }
+        return newState;
     }
     case 'STORAGE_DEPOSIT': {
         const item = action.payload;
@@ -776,13 +847,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             newPlayer.hp = 1;
         }
 
-        return {
+        const newState = {
             ...state,
             mode: GameMode.EXPLORATION,
             combat: null,
             player: { ...newPlayer, inventory: newInv },
             logs: newLogs
         };
+
+        if (state.combat.isVictory && checkAutoSave(state.date, state.date, state.settings.autoSaveFrequency, true)) {
+            try {
+                const saveState = { ...newState, mode: GameMode.EXPLORATION };
+                localStorage.setItem('cavanon_autosave', JSON.stringify(saveState));
+                newState.logs = [...newState.logs, { id: Date.now().toString(), timestamp: formatTime(newState.date), text: "Auto Saved.", type: 'SYSTEM' }];
+            } catch(e) {}
+        }
+
+        return newState;
     }
     default:
         return state;
@@ -821,6 +902,16 @@ const App = () => {
         if (e.key === 'Escape') {
              dispatch({ type: 'SET_MODE', payload: state.mode === GameMode.SETTINGS ? state.previousMode || GameMode.EXPLORATION : GameMode.SETTINGS });
         }
+        
+        // Handle Map View toggle
+        if (e.key === 'm') {
+             if (state.mode === GameMode.EXPLORATION) {
+                 dispatch({ type: 'SET_MODE', payload: GameMode.MAP_VIEW });
+             } else if (state.mode === GameMode.MAP_VIEW) {
+                 dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION });
+             }
+             return;
+        }
 
         if (state.mode === GameMode.EXPLORATION) {
             let dx = 0; let dy = 0;
@@ -839,8 +930,8 @@ const App = () => {
                     const tile = map.tiles[newY][newX];
                     if (tile.type !== TileType.WALL) {
                         
-                        // Portal Check
-                        if (tile.type === TileType.PORTAL && tile.portalTarget) {
+                        // Portal Check - Now supports PORTAL types and any tile with a target (like Towns converted to portals)
+                        if (tile.portalTarget) {
                              dispatch({ type: 'SWITCH_MAP', payload: tile.portalTarget });
                              return;
                         }
@@ -995,6 +1086,7 @@ const App = () => {
                       isMainMenu={true}
                       settings={state.settings}
                       onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
+                      onOpenHelp={() => setShowHelp(true)}
                   />
               )}
               
@@ -1007,16 +1099,7 @@ const App = () => {
                   />
               )}
 
-              {/* Render Settings Modal on top of menu if active */}
-              {state.mode === GameMode.SETTINGS && (
-                  <SettingsModal 
-                      onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })}
-                      onLoadGame={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })}
-                      isMainMenu={true}
-                      settings={state.settings}
-                      onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
-                  />
-              )}
+              {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
           </div>
       );
   }
@@ -1054,11 +1137,6 @@ const App = () => {
               <div className="relative p-1 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
                  <div className="absolute -inset-1 bg-gradient-to-br from-slate-800 to-slate-950 rounded-xl -z-10"></div>
                  <WorldMap mapData={currentMap} player={state.player} npcs={state.npcs} />
-                 
-                 {/* Grid Overlay based on Settings */}
-                 {state.settings.showGrid && (
-                     <div className="absolute inset-0 pointer-events-none z-20 opacity-10 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVQoU2NkYGD4z4AEmBjoIgQAgb4AA90eOuwAAAAASUVORK5CYII=')]"></div>
-                 )}
               </div>
               
               {/* Time/Weather Overlay (Detailed View) */}
@@ -1119,12 +1197,13 @@ const App = () => {
                   </div>
 
                   {/* Quick Actions Grid */}
-                  <div className="mt-4 grid grid-cols-5 gap-2">
-                      <Button title="Inventory [I]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.INVENTORY })}><Backpack size={18}/></Button>
-                      <Button title="Character [C]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CHARACTER })}><Crown size={18}/></Button>
-                      <Button title="Quests [Q]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.QUESTS })}><Scroll size={18}/></Button>
-                      <Button title="Save Game" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SAVE })}><Save size={18}/></Button>
-                      <Button title="Settings [ESC]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SETTINGS })}><Settings size={18}/></Button>
+                  <div className="mt-4 grid grid-cols-6 gap-2">
+                      <Button title="Inventory [I]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.INVENTORY })}><Backpack size={16}/></Button>
+                      <Button title="Character [C]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.CHARACTER })}><Crown size={16}/></Button>
+                      <Button title="Quests [Q]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.QUESTS })}><Scroll size={16}/></Button>
+                      <Button title="Map [M]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.MAP_VIEW })}><Map size={16}/></Button>
+                      <Button title="Bestiary" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => setShowBestiary(true)}><BookOpen size={16}/></Button>
+                      <Button title="Settings [ESC]" variant="secondary" className="py-2 rounded-lg hover:bg-slate-800 border-slate-700" onClick={() => dispatch({ type: 'SET_MODE', payload: GameMode.SETTINGS })}><Settings size={16}/></Button>
                   </div>
               </div>
 
@@ -1186,6 +1265,7 @@ const App = () => {
                   onLoadGame={() => dispatch({ type: 'SET_MODE', payload: GameMode.LOAD })}
                   settings={state.settings}
                   onUpdate={(newSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings })}
+                  onOpenHelp={() => setShowHelp(true)}
               />
           )}
 
@@ -1202,6 +1282,14 @@ const App = () => {
                   mode="LOAD"
                   onClose={() => dispatch({ type: 'SET_MODE', payload: state.previousMode || GameMode.EXPLORATION })}
                   onAction={(slot) => dispatch({ type: 'LOAD_GAME', payload: slot })}
+              />
+          )}
+
+          {state.mode === GameMode.MAP_VIEW && (
+              <FullMap 
+                  mapData={state.maps[state.currentMapId]} 
+                  player={state.player}
+                  onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.EXPLORATION })}
               />
           )}
           

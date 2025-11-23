@@ -1,4 +1,3 @@
-
 import { TileType, Weather, TimeOfDay, Item, NPC, DialogueNode, Tile, GameMap, EquipmentSlot, Stats, Skill, InteractableType, RaceData, ClassData, ItemRarity, ItemMaterial } from './types';
 
 export const TILE_COLORS: Record<TileType, string> = {
@@ -13,6 +12,20 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.PORTAL]: 'bg-cyan-900',
   [TileType.WALL]: 'bg-slate-800',
   [TileType.FLOOR]: 'bg-orange-950',
+};
+
+export const TILE_HEX_COLORS: Record<TileType, string> = {
+  [TileType.GRASS]: '#064e3b', 
+  [TileType.FOREST]: '#052e16',
+  [TileType.MOUNTAIN]: '#44403c',
+  [TileType.WATER]: '#1e3a8a',
+  [TileType.TOWN]: '#78350f',
+  [TileType.DUNGEON]: '#3b0764',
+  [TileType.RUINS]: '#1c1917',
+  [TileType.VOID]: '#000000',
+  [TileType.PORTAL]: '#164e63',
+  [TileType.WALL]: '#1e293b',
+  [TileType.FLOOR]: '#431407',
 };
 
 export const TILE_ICONS: Record<TileType, string> = {
@@ -159,31 +172,31 @@ export const CLASSES: Record<string, ClassData> = {
     'Warrior': {
         id: 'Warrior', name: 'Warrior', description: 'A master of melee combat.',
         skillId: 'POWER_SLASH',
-        baseStats: { ...BASE_STATS, strength: 4, constitution: 2 },
+        baseStats: { ...BASE_STATS, strength: 14, constitution: 12 },
         startingItems: ['SWORD_IRON', 'ARMOR_LEATHER']
     },
     'Mage': {
         id: 'Mage', name: 'Mage', description: 'A scholar of arcane arts.',
         skillId: 'FIREBALL',
-        baseStats: { ...BASE_STATS, intelligence: 5, mp: 20 } as any, // mp hack
+        baseStats: { ...BASE_STATS, intelligence: 15 },
         startingItems: ['STAFF_WOOD', 'ARMOR_LEATHER']
     },
     'Rogue': {
         id: 'Rogue', name: 'Rogue', description: 'A stealthy striker.',
         skillId: 'SHADOW_STRIKE',
-        baseStats: { ...BASE_STATS, dexterity: 4, speed: 3 },
+        baseStats: { ...BASE_STATS, dexterity: 14, speed: 13 },
         startingItems: ['DAGGER_IRON', 'ARMOR_LEATHER']
     },
     'Cleric': {
         id: 'Cleric', name: 'Cleric', description: 'A holy healer.',
         skillId: 'HOLY_LIGHT',
-        baseStats: { ...BASE_STATS, intelligence: 3, constitution: 3 },
+        baseStats: { ...BASE_STATS, intelligence: 13, constitution: 13 },
         startingItems: ['MACE_IRON', 'ARMOR_LEATHER']
     },
     'Berserker': {
         id: 'Berserker', name: 'Berserker', description: 'A raging fighter who ignores pain.',
         skillId: 'RECKLESS_BLOW',
-        baseStats: { ...BASE_STATS, strength: 6, speed: 2, constitution: -2 },
+        baseStats: { ...BASE_STATS, strength: 16, speed: 12, constitution: 8 },
         startingItems: ['AXE_BATTLE', 'ARMOR_LEATHER']
     }
 };
@@ -197,27 +210,44 @@ export const ENEMY_TEMPLATES: Partial<Record<TileType, Array<{
 }>>> = {
     [TileType.GRASS]: [
         { name: 'Wild Dog', stats: { ...BASE_STATS, strength: 6, speed: 10, constitution: 8 }, lootTable: [{ itemId: 'RAT_TAIL', chance: 0.5 }] },
-        { name: 'Goblin Scout', stats: { ...BASE_STATS, strength: 7, dexterity: 10, constitution: 8 }, lootTable: [{ itemId: 'GOBLIN_EAR', chance: 0.3 }, { itemId: 'DAGGER_IRON', chance: 0.05 }] }
+        { name: 'Goblin Scout', stats: { ...BASE_STATS, strength: 7, dexterity: 10, constitution: 8 }, lootTable: [{ itemId: 'GOBLIN_EAR', chance: 0.3 }, { itemId: 'DAGGER_IRON', chance: 0.05 }] },
+        { name: 'Giant Rat', stats: { ...BASE_STATS, strength: 4, speed: 12, constitution: 6 }, lootTable: [{ itemId: 'RAT_TAIL', chance: 0.8 }] },
+        { name: 'Plains Boar', stats: { ...BASE_STATS, strength: 12, constitution: 12, speed: 8 }, lootTable: [{ itemId: 'STEAK', chance: 0.4 }] },
+        { name: 'Slime', stats: { ...BASE_STATS, constitution: 15, strength: 5, speed: 4 }, lootTable: [{ itemId: 'POTION_HP', chance: 0.1 }] }
     ],
     [TileType.FOREST]: [
         { name: 'Dire Wolf', stats: { ...BASE_STATS, strength: 10, speed: 12, constitution: 9 }, lootTable: [{ itemId: 'WOLF_PELT', chance: 0.4 }] },
         { name: 'Bandit', stats: { ...BASE_STATS, strength: 9, constitution: 10, dexterity: 8 }, lootTable: [{ itemId: 'BREAD', chance: 0.3 }, { itemId: 'POTION_HP', chance: 0.1 }], race: 'Human' },
-        { name: 'Giant Spider', stats: { ...BASE_STATS, dexterity: 12, speed: 12, constitution: 8 }, lootTable: [] }
+        { name: 'Giant Spider', stats: { ...BASE_STATS, dexterity: 12, speed: 12, constitution: 8 }, lootTable: [{ itemId: 'SILK', chance: 0.4 }] },
+        { name: 'Treant Sapling', stats: { ...BASE_STATS, strength: 14, constitution: 16, speed: 4 }, lootTable: [{ itemId: 'STAFF_WOOD', chance: 0.1 }] },
+        { name: 'Bear', stats: { ...BASE_STATS, strength: 16, constitution: 18, speed: 8 }, lootTable: [{ itemId: 'WOLF_PELT', chance: 0.5 }, { itemId: 'STEAK', chance: 0.5 }] }
     ],
     [TileType.MOUNTAIN]: [
-        { name: 'Rock Golem', stats: { ...BASE_STATS, strength: 14, constitution: 15, speed: 3 }, lootTable: [] },
-        { name: 'Harpy', stats: { ...BASE_STATS, dexterity: 12, speed: 14, constitution: 9 }, lootTable: [{ itemId: 'GIFT_FLOWER', chance: 0.2 }] }
+        { name: 'Rock Golem', stats: { ...BASE_STATS, strength: 14, constitution: 15, speed: 3 }, lootTable: [{ itemId: 'IRON_ORE', chance: 0.3 }] },
+        { name: 'Harpy', stats: { ...BASE_STATS, dexterity: 12, speed: 14, constitution: 9 }, lootTable: [{ itemId: 'GIFT_FLOWER', chance: 0.2 }] },
+        { name: 'Wyvern Hatchling', stats: { ...BASE_STATS, strength: 16, speed: 14, constitution: 12 }, lootTable: [{ itemId: 'DRAGON_BONE', chance: 0.1 }] },
+        { name: 'Stone Giant', stats: { ...BASE_STATS, strength: 20, constitution: 20, speed: 2 }, lootTable: [{ itemId: 'MACE_IRON', chance: 0.1 }] },
+        { name: 'Troll', stats: { ...BASE_STATS, strength: 14, constitution: 18, speed: 6 }, lootTable: [{ itemId: 'POTION_HP', chance: 0.2 }] }
     ],
     [TileType.RUINS]: [
         { name: 'Skeleton', stats: { ...BASE_STATS, strength: 9, constitution: 7, speed: 8 }, lootTable: [{ itemId: 'BONE_SHARD', chance: 0.6 }, { itemId: 'SWORD_IRON', chance: 0.02 }] },
-        { name: 'Animated Armor', stats: { ...BASE_STATS, constitution: 14, strength: 11, speed: 5 }, lootTable: [{ itemId: 'HELMET_LEATHER', chance: 0.05 }] }
+        { name: 'Animated Armor', stats: { ...BASE_STATS, constitution: 14, strength: 11, speed: 5 }, lootTable: [{ itemId: 'HELMET_LEATHER', chance: 0.05 }] },
+        { name: 'Lich Apprentice', stats: { ...BASE_STATS, intelligence: 16, speed: 8 }, lootTable: [{ itemId: 'MAGIC_DUST', chance: 0.4 }] },
+        { name: 'Gargoyle', stats: { ...BASE_STATS, constitution: 16, strength: 12, speed: 10 }, lootTable: [{ itemId: 'BONE_SHARD', chance: 0.3 }] },
+        { name: 'Specter', stats: { ...BASE_STATS, dexterity: 15, intelligence: 14, constitution: 5 }, lootTable: [{ itemId: 'MAGIC_DUST', chance: 0.5 }] }
     ],
     [TileType.DUNGEON]: [
         { name: 'Dark Mage', stats: { ...BASE_STATS, intelligence: 14, strength: 4, constitution: 8 }, lootTable: [{ itemId: 'MAGIC_DUST', chance: 0.5 }, { itemId: 'STAFF_WOOD', chance: 0.1 }], race: 'Human' },
-        { name: 'Slime', stats: { ...BASE_STATS, constitution: 18, speed: 4, strength: 8 }, lootTable: [{ itemId: 'POTION_HP', chance: 0.2 }] }
+        { name: 'Giant Slime', stats: { ...BASE_STATS, constitution: 22, speed: 4, strength: 10 }, lootTable: [{ itemId: 'POTION_MAX', chance: 0.1 }] },
+        { name: 'Minotaur', stats: { ...BASE_STATS, strength: 18, constitution: 18, speed: 10 }, lootTable: [{ itemId: 'AXE_BATTLE', chance: 0.2 }] },
+        { name: 'Beholder Eye', stats: { ...BASE_STATS, intelligence: 20, dexterity: 15, constitution: 10 }, lootTable: [{ itemId: 'MAGIC_DUST', chance: 0.8 }] },
+        { name: 'Rat King', stats: { ...BASE_STATS, strength: 12, speed: 16, constitution: 12 }, lootTable: [{ itemId: 'RAT_TAIL', chance: 1.0 }] }
     ],
     [TileType.WATER]: [
-        { name: 'Giant Crab', stats: { ...BASE_STATS, constitution: 14, strength: 10, speed: 6 }, lootTable: [] }
+        { name: 'Giant Crab', stats: { ...BASE_STATS, constitution: 14, strength: 10, speed: 6 }, lootTable: [] },
+        { name: 'Sea Serpent', stats: { ...BASE_STATS, strength: 15, speed: 12, constitution: 14 }, lootTable: [{ itemId: 'DRAGON_BONE', chance: 0.2 }] },
+        { name: 'Drowned Sailor', stats: { ...BASE_STATS, strength: 10, constitution: 10, speed: 6 }, lootTable: [{ itemId: 'DAGGER_IRON', chance: 0.1 }] },
+        { name: 'Siren', stats: { ...BASE_STATS, intelligence: 16, speed: 14, constitution: 8 }, lootTable: [{ itemId: 'PEARL', chance: 0.1 }] }
     ]
 };
 
@@ -559,8 +589,8 @@ export const generateVillage = (): GameMap => {
   map[exitY][exitX].type = TileType.PORTAL;
   map[exitY][exitX].portalTarget = {
     mapId: 'world_map',
-    x: 40, 
-    y: 40,
+    x: 31, // Corrected to be East of Village (30,50)
+    y: 50,
     desc: "Enter the Wilderness"
   };
 
@@ -616,8 +646,8 @@ export const generateCity = (): GameMap => {
     map[exitY][exitX].type = TileType.PORTAL;
     map[exitY][exitX].portalTarget = {
       mapId: 'world_map',
-      x: 60, // Near the mountains
-      y: 60,
+      x: 50, 
+      y: 26, // Corrected to be South of City (50,25)
       desc: "Leave City"
     };
 
@@ -625,87 +655,85 @@ export const generateCity = (): GameMap => {
 };
 
 export const generateWorldMap = (): GameMap => {
-  const size = 80; // Large World Map
+  const size = 100;
   const map: Tile[][] = [];
   const centerX = size / 2;
   const centerY = size / 2;
 
+  // Generate continent using simple polar coordinate noise logic for distinct regions
   for (let y = 0; y < size; y++) {
     const row: Tile[] = [];
     for (let x = 0; x < size; x++) {
-      // Distance from center for Continent Shape
       const dx = x - centerX;
       const dy = y - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      const noise1 = Math.sin(x * 0.1) * 5 + Math.cos(y * 0.15) * 5;
-      const noise2 = Math.sin((x + y) * 0.05) * 10;
-      
-      const elevation = (size / 2) - dist + noise1 + noise2;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      // Determine direction relative to center
+      const angle = Math.atan2(dy, dx); 
 
+      // Start with Water
       let type = TileType.WATER;
-
-      if (elevation > 5) {
-          // Landmass logic
-          if (elevation > 35) type = TileType.MOUNTAIN; // High Peaks
-          else if (elevation > 28) type = TileType.RUINS; // Rocky/Ancient
-          else if (elevation > 20) type = TileType.FOREST; // Dense Forests
-          else type = TileType.GRASS; // Plains/Coasts
-          
-          // Random patches
-          if (type === TileType.GRASS && Math.random() < 0.1) type = TileType.FOREST;
+      
+      // Irregular continent shape radius
+      const r = (size/2 - 8) + Math.sin(angle * 7) * 4 + Math.cos(angle * 3) * 6;
+      
+      if (dist < r) {
+        // We are inside the continent
+        // Use coordinates to determine biomes
+        
+        // North (Top): Mountains
+        if (y < size * 0.35) {
+            type = Math.random() > 0.3 ? TileType.MOUNTAIN : TileType.GRASS;
+            // Peaks
+            if (y < size * 0.15 && Math.random() > 0.5) type = TileType.MOUNTAIN; 
+        } 
+        // East (Right): Ruins / Wasteland
+        else if (x > size * 0.7) {
+            type = Math.random() > 0.4 ? TileType.RUINS : TileType.GRASS;
+        }
+        // South (Bottom): Forest / Swamp
+        else if (y > size * 0.65) {
+            type = Math.random() > 0.2 ? TileType.FOREST : TileType.GRASS;
+        }
+        // West (Left): Plains / Grassland
+        else {
+            type = TileType.GRASS;
+            if (Math.random() > 0.9) type = TileType.FOREST;
+        }
       }
-
-      // Force map boundaries to be water
-      if (x < 2 || x > size - 3 || y < 2 || y > size - 3) type = TileType.WATER;
-
-      // Force all tiles explored
+      
+      // Set explored to true to make the map fully visible from the start
       row.push({ x, y, type, explored: true, npcs: [] });
     }
     map.push(row);
   }
 
-  // Portal back to Village (Placed in a safe central-ish area)
-  const entryY = 40;
-  const entryX = 40;
-  
-  // Create a safe landing zone for village
-  for(let dy=-1; dy<=1; dy++){
-      for(let dx=-1; dx<=1; dx++){
-          if (map[entryY+dy] && map[entryY+dy][entryX+dx]) {
-              map[entryY+dy][entryX+dx].type = TileType.GRASS;
-          }
-      }
+  // Place Villages/Cities
+
+  // Starter Village (West-ish)
+  const vX = Math.floor(centerX - 20); // 30
+  const vY = Math.floor(centerY); // 50
+  if (map[vY] && map[vY][vX]) {
+       map[vY][vX].type = TileType.PORTAL;
+       map[vY][vX].portalTarget = {
+           mapId: 'starter_village',
+           x: 7,
+           y: 7,
+           desc: 'Enter Oakhaven'
+       };
   }
 
-  map[entryY][entryX].type = TileType.PORTAL;
-  map[entryY][entryX].portalTarget = {
-    mapId: 'starter_village',
-    x: 13,
-    y: 7, 
-    desc: "Return to Oakhaven"
-  };
-
-  // Portal to Capital City (Placed near mountains)
-  const cityY = 60;
-  const cityX = 60;
-  
-  // Create safe landing zone for city
-  for(let dy=-1; dy<=1; dy++){
-      for(let dx=-1; dx<=1; dx++){
-          if (map[cityY+dy] && map[cityY+dy][cityX+dx]) {
-              map[cityY+dy][cityX+dx].type = TileType.MOUNTAIN;
-          }
-      }
+  // Capital City (North)
+  const cX = Math.floor(centerX); // 50
+  const cY = Math.floor(centerY - 25); // 25
+   if (map[cY] && map[cY][cX]) {
+       map[cY][cX].type = TileType.PORTAL;
+       map[cY][cX].portalTarget = {
+           mapId: 'capital_city',
+           x: 12,
+           y: 23,
+           desc: 'Enter Capital'
+       };
   }
-  
-  map[cityY][cityX].type = TileType.PORTAL;
-  map[cityY][cityX].portalTarget = {
-      mapId: 'capital_city',
-      x: 12,
-      y: 23,
-      desc: "Enter High King's City"
-  };
 
-  return { id: 'world_map', name: 'The Wildlands', width: size, height: size, tiles: map };
+  return { id: 'world_map', name: 'World Map', width: size, height: size, tiles: map };
 };

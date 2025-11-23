@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { CombatState, Player, BattleSpeed, StatusEffect } from '../types';
 import { Button } from './UIComponents';
@@ -108,9 +109,9 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
   // Auto-scroll combat logs
   useEffect(() => {
     if (logEndRef.current) {
-        logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        logEndRef.current.scrollIntoView({ behavior: combatState.speed < 400 ? 'auto' : 'smooth' });
     }
-  }, [combatState.logs, combatState.isVictory]);
+  }, [combatState.logs, combatState.isVictory, combatState.speed]);
 
   // Handle Animations based on new logs
   useEffect(() => {
@@ -134,12 +135,12 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
 
           if (newAnim !== 'NONE') {
               setAnimState(newAnim);
-              const timer = setTimeout(() => setAnimState('NONE'), 500);
+              const timer = setTimeout(() => setAnimState('NONE'), Math.min(500, combatState.speed));
               return () => clearTimeout(timer);
           }
       }
       setPrevLogCount(combatState.logs.length);
-  }, [combatState.logs, prevLogCount, player.name, combatState.enemy.name]);
+  }, [combatState.logs, prevLogCount, player.name, combatState.enemy.name, combatState.speed]);
 
 
   const { derived: playerDerived } = calculateStats(player);
@@ -152,6 +153,15 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
 
   // Icon for speed
   const SpeedIcon = combatState.speed === BattleSpeed.NORMAL ? Play : combatState.speed === BattleSpeed.FAST ? FastForward : Zap;
+
+  // Dynamic Styles for Fast Combat
+  const tickRate = combatState.speed;
+  const isFast = tickRate < 400;
+  
+  // Transition should be slightly faster than tick rate to complete before next update
+  const dynamicTransition = { transitionDuration: `${isFast ? 80 : 300}ms` };
+  // Speed up shake animations for fast mode
+  const dynamicAnimDuration = isFast ? { animationDuration: '0.2s' } : undefined;
 
   // Rarity Visuals
   const getRarityColor = (r: number) => {
@@ -180,10 +190,9 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
 
   const rarityColor = getRarityColor(combatState.enemy.rarity);
 
-  // Determine Animation Classes
-  const screenShakeClass = animState === 'ENEMY_ATK' ? 'anim-shake bg-red-900/10' : animState === 'CRIT' ? 'anim-hard-shake bg-white/10' : '';
+  // Determine Animation Classes (Removed BG Red Flash)
+  const screenShakeClass = animState === 'ENEMY_ATK' ? 'anim-shake' : animState === 'CRIT' ? 'anim-hard-shake' : '';
   const enemySpriteClass = animState === 'PLAYER_ATK' ? 'anim-hit' : animState === 'CRIT' ? 'anim-shake brightness-150' : 'animate-bounce-slow';
-  const flashOverlayClass = animState === 'ENEMY_ATK' ? 'bg-red-500 anim-damage-overlay' : '';
 
   // --- Post Battle View ---
   if (combatState.isVictory !== null) {
@@ -262,11 +271,11 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
   // --- Active Combat View ---
 
   return (
-    <div className={`w-full h-full bg-slate-950 flex flex-col animate-in fade-in duration-300 font-sans ${screenShakeClass}`}>
+    <div 
+        className={`w-full h-full bg-slate-950 flex flex-col animate-in fade-in duration-300 font-sans ${screenShakeClass}`}
+        style={dynamicAnimDuration}
+    >
       
-      {/* Damage Overlay */}
-      <div className={`absolute inset-0 pointer-events-none z-50 ${flashOverlayClass}`}></div>
-
       {/* 1. SCENE AREA (Top 60%) - FIXED HEIGHT */}
       <div className={`h-[60vh] shrink-0 relative flex items-center justify-center overflow-hidden ${TILE_COLORS[combatState.enemy.type]} bg-opacity-20`}>
           
@@ -287,8 +296,8 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
                {/* Health Bar */}
                <div className="w-full h-3 bg-slate-900/80 rounded-full border border-slate-600/50 backdrop-blur-sm overflow-hidden relative shadow-lg">
                     <div 
-                        className="h-full bg-red-600 transition-all duration-300 ease-out relative"
-                        style={{ width: `${Math.max(0, enemyPercent)}%` }}
+                        className="h-full bg-red-600 transition-all ease-out relative"
+                        style={{ width: `${Math.max(0, enemyPercent)}%`, ...dynamicTransition }}
                     >
                         <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
                     </div>
@@ -305,7 +314,10 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
           </div>
 
           {/* Enemy Sprite */}
-          <div className={`relative z-10 filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.5)] ${enemySpriteClass}`}>
+          <div 
+            className={`relative z-10 filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.5)] ${enemySpriteClass}`}
+            style={dynamicAnimDuration}
+          >
                {/* Sprite Glow Aura */}
                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 blur-3xl opacity-20 rounded-full ${
                     combatState.enemy.rarity >= 4 ? 'bg-yellow-500 animate-pulse' : 
@@ -377,7 +389,10 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
                             <span>{Math.floor(player.hp)} / {Math.round(playerDerived.maxHp)}</span>
                         </div>
                         <div className="h-4 bg-slate-950 rounded border border-slate-700 overflow-hidden relative">
-                            <div className="h-full bg-gradient-to-r from-red-600 to-red-500 transition-all duration-300" style={{ width: `${playerPercent}%` }}></div>
+                            <div 
+                                className="h-full bg-gradient-to-r from-red-600 to-red-500 transition-all ease-out" 
+                                style={{ width: `${playerPercent}%`, ...dynamicTransition }}
+                            ></div>
                             <div className="absolute inset-0 bg-white/5"></div>
                         </div>
                      </div>
@@ -389,7 +404,10 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
                             <span>{Math.floor(player.mp)} / {Math.round(playerDerived.maxMp)}</span>
                         </div>
                         <div className="h-4 bg-slate-950 rounded border border-slate-700 overflow-hidden relative">
-                            <div className="h-full bg-gradient-to-r from-blue-600 to-blue-500 transition-all duration-300" style={{ width: `${playerMpPercent}%` }}></div>
+                            <div 
+                                className="h-full bg-gradient-to-r from-blue-600 to-blue-500 transition-all ease-out" 
+                                style={{ width: `${playerMpPercent}%`, ...dynamicTransition }}
+                            ></div>
                              <div className="absolute inset-0 bg-white/5"></div>
                         </div>
                      </div>
@@ -407,17 +425,6 @@ const CombatView: React.FC<CombatViewProps> = ({ combatState, player, onToggleSp
                  >
                      <SpeedIcon size={24} className={`transition-colors ${combatState.speed === BattleSpeed.VERY_FAST ? 'text-yellow-400' : 'text-slate-400 group-hover:text-white'}`} />
                      <span className="text-[10px] font-bold tracking-widest text-slate-500 group-hover:text-slate-300">SPEED</span>
-                 </Button>
-
-                 <Button 
-                    onClick={onFleeAttempt} 
-                    variant="danger" 
-                    className="flex-1 w-full h-full md:h-16 rounded-lg border border-red-900/50 hover:border-red-500/50 flex flex-col items-center justify-center gap-1 group transition-all"
-                    title="Attempt Flee"
-                    disabled={!combatState.isStarted}
-                 >
-                     <ShieldAlert size={24} className="text-red-800 group-hover:text-red-400 transition-colors" />
-                     <span className="text-[10px] font-bold tracking-widest text-red-900 group-hover:text-red-300">FLEE</span>
                  </Button>
             </div>
       </div>

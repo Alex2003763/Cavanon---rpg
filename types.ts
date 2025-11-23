@@ -1,4 +1,5 @@
 
+
 export enum TileType {
   GRASS = 'GRASS',
   FOREST = 'FOREST',
@@ -49,7 +50,8 @@ export enum GameMode {
   QUESTS = 'QUESTS',
   SHOP = 'SHOP',
   SAVE = 'SAVE',
-  LOAD = 'LOAD'
+  LOAD = 'LOAD',
+  MAP_VIEW = 'MAP_VIEW'
 }
 
 export enum EquipmentSlot {
@@ -265,13 +267,17 @@ export interface LogEntry {
   type: 'NARRATIVE' | 'COMBAT' | 'SYSTEM' | 'INFO' | 'DIALOGUE' | 'QUEST';
 }
 
+export enum AutoSaveFrequency {
+  OFF = 'OFF',
+  EVENTS = 'EVENTS',
+  HOURLY = 'HOURLY',
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY'
+}
+
 export interface GameSettings {
   textSpeed: 'SLOW' | 'NORMAL' | 'FAST' | 'INSTANT';
-  masterVolume: number;
-  musicVolume: number;
-  sfxVolume: number;
-  difficulty: 'EASY' | 'NORMAL' | 'HARD';
-  showGrid: boolean;
+  autoSaveFrequency: AutoSaveFrequency;
 }
 
 export interface Enemy {

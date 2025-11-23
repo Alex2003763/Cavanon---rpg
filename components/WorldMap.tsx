@@ -1,8 +1,7 @@
-
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useRef, useEffect } from 'react';
 import { Tile, TileType, Player, InteractableType, NPC } from '../types';
-import { TILE_COLORS, TILE_ICONS } from '../constants';
-import { User, Users, DoorOpen, BedDouble, Package, Store, Hammer, Shield, FlaskConical, Utensils, Ghost, MapPin } from 'lucide-react';
+import { TILE_COLORS, TILE_ICONS, TILE_HEX_COLORS } from '../constants';
+import { User, Users, DoorOpen, BedDouble, Package, Store, Hammer, Shield, FlaskConical, Utensils, Ghost, MapPin, X } from 'lucide-react';
 
 interface WorldMapProps {
   mapData: { tiles: Tile[][], width: number, height: number };
@@ -46,7 +45,6 @@ const MapTile = memo(({
   const isLandmark = [TileType.TOWN, TileType.DUNGEON, TileType.RUINS, TileType.PORTAL].includes(type);
 
   // Pre-calculate static classes
-  // REMOVED: gpu-accelerate and heavy shadows on every tile
   const baseClasses = "aspect-square flex items-center justify-center relative border";
   const bgClass = isVoid ? 'bg-black' : (isExplored ? TILE_COLORS[type] : 'bg-slate-950');
   const borderClass = !isExplored && !isVoid ? 'border-slate-900/20' : (isLandmark ? 'border-white/30' : 'border-slate-950/10');
@@ -192,6 +190,109 @@ const WorldMap: React.FC<WorldMapProps> = ({ mapData, player, npcs, viewRadius =
       </div>
     </div>
   );
+};
+
+export const FullMap: React.FC<{ 
+    mapData: { tiles: Tile[][], width: number, height: number, name: string }; 
+    player: Player;
+    onClose: () => void;
+}> = ({ mapData, player, onClose }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Determine Scale
+        // Use a safe calculation for tile size to prevent 0 or negative values
+        const viewportSize = Math.min(window.innerHeight * 0.85, window.innerWidth * 0.85);
+        const maxDim = Math.max(mapData.width, mapData.height, 1);
+        const tileSize = Math.max(2, Math.floor(viewportSize / maxDim));
+        
+        canvas.width = mapData.width * tileSize;
+        canvas.height = mapData.height * tileSize;
+
+        // Clear Background (Slate-950)
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Tiles
+        for(let y = 0; y < mapData.height; y++) {
+            for(let x = 0; x < mapData.width; x++) {
+                const tile = mapData.tiles[y][x];
+                
+                // Get color from constant map
+                ctx.fillStyle = TILE_HEX_COLORS[tile.type] || '#0f172a';
+                ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+
+                // Highlight Landmarks
+                if ([TileType.TOWN, TileType.PORTAL, TileType.DUNGEON].includes(tile.type)) {
+                     ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                     ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                }
+            }
+        }
+
+        // Draw Player Marker
+        const px = player.position.x * tileSize + tileSize/2;
+        const py = player.position.y * tileSize + tileSize/2;
+        const radius = Math.max(tileSize/1.5, 3);
+
+        // Ping Animation Effect (Static on Canvas, but drawn distinctly)
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
+        ctx.beginPath();
+        ctx.arc(px, py, radius * 2, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#f59e0b'; // Amber 500
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1, tileSize / 4);
+        ctx.stroke();
+
+    }, [mapData, player.position]);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 border-2 border-slate-700 p-3 rounded-lg shadow-2xl relative flex flex-col items-center max-h-screen max-w-screen overflow-auto">
+                 <div className="absolute top-4 left-4 bg-black/80 px-4 py-2 rounded text-amber-500 font-bold pixel-font border border-amber-900/50 shadow-lg z-10 flex items-center gap-2">
+                    <MapPin size={16} />
+                    {mapData.name}
+                 </div>
+                 
+                 <button 
+                    onClick={onClose}
+                    className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-2 border-2 border-slate-900 hover:bg-red-500 transition-colors shadow-lg z-20"
+                    title="Close Map (M)"
+                >
+                    <X size={24} />
+                 </button>
+
+                 <div className="relative overflow-auto rounded border border-slate-800 shadow-inner bg-black">
+                     <canvas ref={canvasRef} className="block" />
+                 </div>
+                 
+                 <div className="mt-3 flex items-center gap-4 text-slate-400 text-xs font-mono bg-slate-950 px-4 py-2 rounded-full border border-slate-800">
+                    <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span> You
+                    </span>
+                    <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-cyan-800"></span> Portal
+                    </span>
+                    <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-stone-700"></span> Mountain
+                    </span>
+                    <span>Pos: {player.position.x}, {player.position.y}</span>
+                 </div>
+            </div>
+        </div>
+    );
 };
 
 export default memo(WorldMap);
