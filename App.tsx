@@ -1,16 +1,18 @@
+
 import React, { useReducer, useEffect, useState, useRef } from 'react';
 import WorldMap, { FullMap } from './components/WorldMap';
-import { Panel, Button, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface, SaveLoadModal } from './components/UIComponents';
+import { Panel, Button, DialoguePanel, CharacterCreation, SettingsModal, HelpModal, InventoryModal, CharacterSheet, StorageModal, BestiaryModal, QuestPanel, ShopInterface, SaveLoadModal, LoadingScreen } from './components/UIComponents';
 import GameLog from './components/GameLog';
 import CombatView from './components/CombatView';
 import { 
   GameState, GameMode, TileType, Weather, TimeOfDay, Player, LogEntry, NPC, EquipmentSlot, Item, Stats, BattleSpeed, Enemy, CombatState, InteractableType, QuestStatus, QuestType, Action, AutoSaveFrequency, GameDate 
 } from './types';
 import { 
-  BASE_STATS, WEATHER_ICONS, NPC_TEMPLATES, DIALOGUE_TREE, ITEMS, generateVillage, generateWorldMap, generatePlayerHome, generateCity
+  BASE_STATS, WEATHER_ICONS, NPC_TEMPLATES, DIALOGUE_TREE, ITEMS 
 } from './constants';
 import { 
-  calculateStats, formatTime, generateEnemy, resolveAutoTurn, calculateFleeChance, generateRandomQuest, calculateTotalDays, generateShopInventory, generateProceduralItem, addToInventory, removeFromInventory
+  calculateStats, formatTime, generateEnemy, resolveAutoTurn, calculateFleeChance, generateRandomQuest, calculateTotalDays, generateShopInventory, generateProceduralItem, addToInventory, removeFromInventory, updateQuestProgress,
+  generateVillage, generateWorldMap, generatePlayerHome, generateCity
 } from './utils';
 import { Clock, Backpack, User, BookOpen, Save, HelpCircle, Heart, Zap, Scroll, Star, Settings, Sword, Map, Gamepad2, Skull, Crown } from 'lucide-react';
 
@@ -146,6 +148,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             }
         } catch (e) {}
         return state;
+    }
+    case 'IMPORT_SAVE': {
+        const loadedState = action.payload;
+        return {
+            ...loadedState,
+            mode: GameMode.EXPLORATION,
+            logs: [...loadedState.logs, { id: Date.now().toString(), timestamp: formatTime(loadedState.date), text: "Game Imported from file.", type: 'SYSTEM' }]
+        };
     }
     case 'SET_MODE':
       return { 
@@ -338,9 +348,18 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             });
         }
 
+        // Quest Update (Collect items)
+        let playerForQuests = { ...state.player, inventory: newInventory };
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+        
+        questUpdates.notifications.forEach(note => {
+            newLogs.push({ id: Date.now().toString(), timestamp: formatTime(newDate), text: note, type: 'QUEST' });
+        });
+
         const newState = {
             ...state,
-            player: { ...state.player, hp: newHp, mp: newMp, inventory: newInventory },
+            player: { ...playerForQuests, hp: newHp, mp: newMp },
             date: newDate,
             timeOfDay,
             mode: nextMode,
@@ -569,9 +588,15 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const newInv = removeFromInventory(state.player.inventory, item, 1);
         // Add 1 to storage
         const newStorage = addToInventory(state.storage, item, 1);
+        
+        // Check Quests (Inv changed)
+        let playerForQuests = { ...state.player, inventory: newInv };
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+
         return {
             ...state,
-            player: { ...state.player, inventory: newInv },
+            player: playerForQuests,
             storage: newStorage
         };
     }
@@ -581,10 +606,22 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const newStorage = removeFromInventory(state.storage, item, 1);
         // Add 1 to player
         const newInv = addToInventory(state.player.inventory, item, 1);
+
+        // Check Quests (Inv changed)
+        let playerForQuests = { ...state.player, inventory: newInv };
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+
+        const newLogs = [...state.logs];
+        questUpdates.notifications.forEach(note => {
+            newLogs.push({ id: Date.now().toString(), timestamp: formatTime(state.date), text: note, type: 'QUEST' });
+        });
+
         return {
             ...state,
-            player: { ...state.player, inventory: newInv },
-            storage: newStorage
+            player: playerForQuests,
+            storage: newStorage,
+            logs: newLogs
         };
     }
     case 'GENERATE_QUEST': {
@@ -600,19 +637,30 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const quest = state.player.quests.find(q => q.id === questId);
         if (!quest || quest.status !== QuestStatus.COMPLETED) return state;
 
+        let newInventory = state.player.inventory;
+
+        // If it was a collect quest, consume items
+        if (quest.type === QuestType.COLLECT) {
+            const itemInInv = newInventory.find(i => i.id === quest.targetId);
+            if (itemInInv) {
+                newInventory = removeFromInventory(newInventory, itemInInv, quest.amountRequired);
+            }
+        }
+
         const newExp = state.player.exp + quest.expReward;
         const newGold = state.player.gold + quest.goldReward;
         const remainingQuests = state.player.quests.filter(q => q.id !== questId);
         
+        // Check Quests again (Inv changed if collect)
+        let playerForQuests = { ...state.player, inventory: newInventory, exp: newExp, gold: newGold, quests: remainingQuests, completedQuestIds: [...state.player.completedQuestIds, questId] };
+        
+        // Also need to re-run collect quest checks in case multiple quests needed same item
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+
         return {
             ...state,
-            player: {
-                ...state.player,
-                exp: newExp,
-                gold: newGold,
-                quests: remainingQuests,
-                completedQuestIds: [...state.player.completedQuestIds, questId]
-            },
+            player: playerForQuests,
             logs: [...state.logs, { id: Date.now().toString(), timestamp: formatTime(state.date), text: `Quest Complete: ${quest.title} (+${quest.expReward} XP, +${quest.goldReward}g)`, type: 'QUEST' }]
         };
     }
@@ -675,13 +723,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         // Add to inventory (handles stacks)
         const newInv = addToInventory(state.player.inventory, item, 1);
 
+        // Check Quests (Inv changed)
+        let playerForQuests = { ...state.player, inventory: newInv, gold: state.player.gold - item.value };
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+
+        const newLogs = [...state.logs];
+        questUpdates.notifications.forEach(note => {
+            newLogs.push({ id: Date.now().toString(), timestamp: formatTime(state.date), text: note, type: 'QUEST' });
+        });
+
         return {
             ...state,
-            player: {
-                ...state.player,
-                gold: state.player.gold - item.value,
-                inventory: newInv
-            }
+            player: playerForQuests,
+            logs: newLogs
         };
     }
     case 'SELL_ITEM': {
@@ -691,13 +746,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         // Remove 1 from inventory
         const newInv = removeFromInventory(state.player.inventory, item, 1);
 
+        // Check Quests (Inv changed - might un-complete collect quests)
+        let playerForQuests = { ...state.player, inventory: newInv, gold: state.player.gold + sellPrice };
+        const questUpdates = updateQuestProgress(playerForQuests);
+        playerForQuests.quests = questUpdates.quests;
+
         return {
             ...state,
-            player: {
-                ...state.player,
-                gold: state.player.gold + sellPrice,
-                inventory: newInv
-            }
+            player: playerForQuests
         };
     }
     case 'INIT_COMBAT':
@@ -818,6 +874,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                     newInv = addToInventory(newInv, item, 1);
                 });
             }
+            newPlayer.inventory = newInv;
             
             newLogs.push({ 
                 id: Date.now().toString(), 
@@ -826,13 +883,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 type: 'COMBAT' 
             });
             
-            // Quest Progress Check (Kill Quests)
-            newPlayer.quests = newPlayer.quests.map(q => {
-                if (q.status === QuestStatus.ACTIVE && q.type === QuestType.KILL && q.targetName === state.combat?.enemy.name) {
-                    const newAmt = q.amountCurrent + 1;
-                    return { ...q, amountCurrent: newAmt, status: newAmt >= q.amountRequired ? QuestStatus.COMPLETED : QuestStatus.ACTIVE };
-                }
-                return q;
+            // Quest Update (Kill Check + Collect Check from loot)
+            const questUpdates = updateQuestProgress(newPlayer, state.combat.enemy.name);
+            newPlayer.quests = questUpdates.quests;
+            questUpdates.notifications.forEach(note => {
+                newLogs.push({ id: Date.now().toString(), timestamp: formatTime(state.date), text: note, type: 'QUEST' });
             });
             
             // Level Up check is handled by the useEffect in the App component
@@ -851,7 +906,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             ...state,
             mode: GameMode.EXPLORATION,
             combat: null,
-            player: { ...newPlayer, inventory: newInv },
+            player: newPlayer,
             logs: newLogs
         };
 
@@ -874,6 +929,21 @@ const App = () => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [showHelp, setShowHelp] = useState(false);
   const [showBestiary, setShowBestiary] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Initial Loading Effect
+  useEffect(() => {
+    const init = async () => {
+        try {
+           // Wait for fonts to be ready
+           await document.fonts.ready;
+        } catch(e) {}
+        
+        // Minimum wait time for aesthetic purposes and to ensure CSS/Tailwind has processed
+        setTimeout(() => setIsLoading(false), 1200);
+    };
+    init();
+  }, []);
 
   // Combat Tick Effect
   useEffect(() => {
@@ -896,7 +966,7 @@ const App = () => {
   // Input Handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        if (state.mode === GameMode.CREATION) return;
+        if (state.mode === GameMode.CREATION || isLoading) return;
         
         // Menu toggles
         if (e.key === 'Escape') {
@@ -952,7 +1022,12 @@ const App = () => {
                 if (tile.interactable) {
                     foundInteraction = true;
                     if (tile.interactable.type === InteractableType.BED) {
-                        dispatch({ type: 'REST' });
+                        // FIX: Only allow free rest in player_home
+                        if (state.currentMapId === 'player_home') {
+                             dispatch({ type: 'REST' });
+                        } else {
+                             dispatch({ type: 'ADD_LOG', payload: { type: 'INFO', text: "You cannot sleep in this bed. Speak to the Innkeeper to rent a room." } });
+                        }
                     }
                     if (tile.interactable.type === InteractableType.STORAGE) {
                         dispatch({ type: 'SET_MODE', payload: GameMode.STORAGE });
@@ -994,10 +1069,14 @@ const App = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.mode, state.player.position, state.currentMapId, state.maps, state.npcs, state.previousMode]);
+  }, [state.mode, state.player.position, state.currentMapId, state.maps, state.npcs, state.previousMode, isLoading]);
 
 
   // --- Rendering ---
+  
+  if (isLoading) {
+      return <LoadingScreen />;
+  }
 
   const isMenuContext = state.mode === GameMode.MENU || 
     ((state.mode === GameMode.SETTINGS || state.mode === GameMode.LOAD) && state.previousMode === GameMode.MENU);
@@ -1096,6 +1175,7 @@ const App = () => {
                       mode="LOAD"
                       onClose={() => dispatch({ type: 'SET_MODE', payload: GameMode.MENU })}
                       onAction={(slot) => dispatch({ type: 'LOAD_GAME', payload: slot })}
+                      onImport={(data) => dispatch({ type: 'IMPORT_SAVE', payload: data })}
                   />
               )}
 
@@ -1282,6 +1362,7 @@ const App = () => {
                   mode="LOAD"
                   onClose={() => dispatch({ type: 'SET_MODE', payload: state.previousMode || GameMode.EXPLORATION })}
                   onAction={(slot) => dispatch({ type: 'LOAD_GAME', payload: slot })}
+                  onImport={(data) => dispatch({ type: 'IMPORT_SAVE', payload: data })}
               />
           )}
 
@@ -1307,7 +1388,7 @@ const App = () => {
 
           {state.mode === GameMode.INTERACTION && state.activeInteraction && (
               <DialoguePanel 
-                  npcName={state.npcs.find(n => n.id === state.activeInteraction!.npcId)?.name || 'Unknown'}
+                  npc={state.npcs.find(n => n.id === state.activeInteraction!.npcId)!}
                   text={
                        typeof DIALOGUE_TREE[state.activeInteraction.dialogueId].text === 'function'
                        ? (DIALOGUE_TREE[state.activeInteraction.dialogueId].text as Function)(state.player, state.npcs.find(n => n.id === state.activeInteraction!.npcId))

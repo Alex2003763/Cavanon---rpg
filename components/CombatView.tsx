@@ -1,8 +1,7 @@
 
-
 import React, { useEffect, useRef, useState } from 'react';
 import { CombatState, Player, BattleSpeed, StatusEffect } from '../types';
-import { Button } from './UIComponents';
+import { Button, StatusBadge } from './UIComponents';
 import { calculateStats, calculateFleeChance } from '../utils';
 import { Swords, ShieldAlert, Skull, Play, FastForward, Zap, Star, Ghost, Bug, Droplet, User, Hexagon, PawPrint, Shield, Trophy, AlertTriangle, Heart, Crosshair, RotateCcw, Sword, Flame, Snowflake, Activity } from 'lucide-react';
 import { TILE_COLORS } from '../constants';
@@ -15,57 +14,6 @@ interface CombatViewProps {
   onClose: () => void; // Used for Victory/Defeat confirmation
   onStart: () => void;
 }
-
-const StatusBadge: React.FC<{ effect: StatusEffect }> = ({ effect }) => {
-    let colorClass = 'bg-slate-700 border-slate-600 text-slate-200';
-    let Icon = Activity;
-
-    switch (effect.type) {
-        case 'POISON': 
-            colorClass = 'bg-green-900/50 border-green-700 text-green-400'; 
-            Icon = Skull; 
-            break;
-        case 'STUN': 
-            colorClass = 'bg-yellow-900/50 border-yellow-700 text-yellow-400'; 
-            Icon = Zap; 
-            break;
-        case 'BLEED': 
-            colorClass = 'bg-red-900/50 border-red-700 text-red-400'; 
-            Icon = Droplet; 
-            break;
-        case 'BURN': 
-            colorClass = 'bg-orange-900/50 border-orange-700 text-orange-400'; 
-            Icon = Flame; 
-            break;
-        case 'FREEZE': 
-            colorClass = 'bg-cyan-900/50 border-cyan-700 text-cyan-400'; 
-            Icon = Snowflake; 
-            break;
-        case 'REGEN': 
-            colorClass = 'bg-emerald-900/50 border-emerald-700 text-emerald-400'; 
-            Icon = Heart; 
-            break;
-        case 'BUFF_STR': 
-            colorClass = 'bg-blue-900/50 border-blue-700 text-blue-400'; 
-            Icon = Sword; 
-            break;
-        case 'BUFF_DEF': 
-            colorClass = 'bg-indigo-900/50 border-indigo-700 text-indigo-400'; 
-            Icon = Shield; 
-            break;
-    }
-
-    return (
-        <div 
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${colorClass} shadow-sm animate-in zoom-in duration-300`}
-            title={`${effect.name}: ${effect.duration} turns remaining`}
-        >
-            <Icon size={10} />
-            <span>{effect.name}</span>
-            <span className="opacity-75 border-l border-white/10 pl-1 ml-0.5">{effect.duration}</span>
-        </div>
-    );
-};
 
 // Helper component for individual log entries
 const CombatLogEntry: React.FC<{ log: string; player: Player }> = ({ log, player }) => {

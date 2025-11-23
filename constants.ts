@@ -1,4 +1,7 @@
+
+
 import { TileType, Weather, TimeOfDay, Item, NPC, DialogueNode, Tile, GameMap, EquipmentSlot, Stats, Skill, InteractableType, RaceData, ClassData, ItemRarity, ItemMaterial } from './types';
+import { addToInventory } from './utils';
 
 export const TILE_COLORS: Record<TileType, string> = {
   [TileType.GRASS]: 'bg-emerald-900',
@@ -97,16 +100,18 @@ export const ITEMS: Record<string, Item> = {
   'BREAD': { id: 'BREAD', name: 'Stale Bread', type: 'CONSUMABLE', value: 2, description: 'Restores 10 HP', rarity: ItemRarity.COMMON },
   'STEAK': { id: 'STEAK', name: 'Cooked Steak', type: 'CONSUMABLE', value: 15, description: 'Restores 30 HP', rarity: ItemRarity.UNCOMMON },
   'CHEESE': { id: 'CHEESE', name: 'Aged Cheese', type: 'CONSUMABLE', value: 8, description: 'Restores 20 HP', rarity: ItemRarity.COMMON },
+  'PEARL': { id: 'PEARL', name: 'Shimmering Pearl', type: 'MISC', value: 50, description: 'A valuable gem from the sea.', rarity: ItemRarity.RARE },
+  'IRON_ORE': { id: 'IRON_ORE', name: 'Iron Ore', type: 'MISC', value: 10, description: 'Raw iron.', rarity: ItemRarity.COMMON },
   
   // Basic Weapons (Starters)
   'SWORD_IRON': { id: 'SWORD_IRON', name: 'Iron Sword', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 50, description: 'Standard infantry blade', damage: 5, stats: { strength: 2 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON },
-  'DAGGER_IRON': { id: 'DAGGER_IRON', name: 'Iron Dagger', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 40, description: 'Quick blade', damage: 3, stats: { dexterity: 3, speed: 2 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON },
-  'STAFF_WOOD': { id: 'STAFF_WOOD', name: 'Wooden Staff', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 40, description: 'Focus for mana', damage: 2, stats: { intelligence: 4 }, rarity: ItemRarity.COMMON, material: ItemMaterial.WOOD },
-  'AXE_BATTLE': { id: 'AXE_BATTLE', name: 'Battle Axe', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 55, description: 'Double-bitted axe', damage: 8, stats: { strength: 4, speed: -2 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON },
-  'MACE_IRON': { id: 'MACE_IRON', name: 'Iron Mace', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 45, description: 'Heavy crusher', damage: 6, stats: { strength: 3, speed: -1 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON },
+  'DAGGER_IRON': { id: 'DAGGER_IRON', name: 'Iron Dagger', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 40, description: 'Quick blade', damage: 3, stats: { dexterity: 3, speed: 2 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON, effects: [{ type: 'BLEED_CHANCE', value: 0.15 }] },
+  'STAFF_WOOD': { id: 'STAFF_WOOD', name: 'Wooden Staff', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 40, description: 'Focus for mana', damage: 2, stats: { intelligence: 4 }, rarity: ItemRarity.COMMON, material: ItemMaterial.WOOD, effects: [{ type: 'MANA_STEAL', value: 0.05 }] },
+  'AXE_BATTLE': { id: 'AXE_BATTLE', name: 'Battle Axe', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 55, description: 'Double-bitted axe', damage: 8, stats: { strength: 4, speed: -2 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON, effects: [{ type: 'CRIT_DMG', value: 0.5 }] },
+  'MACE_IRON': { id: 'MACE_IRON', name: 'Iron Mace', type: 'WEAPON', slot: EquipmentSlot.MAIN_HAND, value: 45, description: 'Heavy crusher', damage: 6, stats: { strength: 3, speed: -1 }, rarity: ItemRarity.COMMON, material: ItemMaterial.IRON, effects: [{ type: 'STUN_CHANCE', value: 0.1 }] },
   
   // Basic Armor (Starters)
-  'SHIELD_WOOD': { id: 'SHIELD_WOOD', name: 'Wooden Shield', type: 'ARMOR', slot: EquipmentSlot.OFF_HAND, value: 30, description: 'Basic protection', defense: 2, rarity: ItemRarity.COMMON, material: ItemMaterial.WOOD },
+  'SHIELD_WOOD': { id: 'SHIELD_WOOD', name: 'Wooden Shield', type: 'ARMOR', slot: EquipmentSlot.OFF_HAND, value: 30, description: 'Basic protection', defense: 2, rarity: ItemRarity.COMMON, material: ItemMaterial.WOOD, effects: [{ type: 'THORNS', value: 0.1 }] },
   'HELMET_LEATHER': { id: 'HELMET_LEATHER', name: 'Leather Cap', type: 'ARMOR', slot: EquipmentSlot.HEAD, value: 25, description: 'Light head protection', defense: 1, rarity: ItemRarity.COMMON, material: ItemMaterial.LEATHER },
   'ARMOR_LEATHER': { id: 'ARMOR_LEATHER', name: 'Leather Vest', type: 'ARMOR', slot: EquipmentSlot.BODY, value: 50, description: 'Light body armor', defense: 3, rarity: ItemRarity.COMMON, material: ItemMaterial.LEATHER },
   'BOOTS_LEATHER': { id: 'BOOTS_LEATHER', name: 'Leather Boots', type: 'ARMOR', slot: EquipmentSlot.FEET, value: 25, description: 'Sturdy boots', defense: 1, stats: { speed: 1 }, rarity: ItemRarity.COMMON, material: ItemMaterial.LEATHER },
@@ -124,13 +129,16 @@ export const ITEMS: Record<string, Item> = {
 
 export const SKILLS: Record<string, Skill> = {
   'POWER_SLASH': {
-    id: 'POWER_SLASH', name: 'Power Slash', description: 'A heavy strike dealing 150% Physical damage.', mpCost: 5, cooldown: 3, type: 'ACTIVE'
+    id: 'POWER_SLASH', name: 'Power Slash', description: 'A heavy strike dealing 150% Physical damage. Chance to Stun.', mpCost: 5, cooldown: 3, type: 'ACTIVE',
+    statusEffect: { type: 'STUN', chance: 0.3, duration: 1, value: 0 }
   },
   'FIREBALL': {
-    id: 'FIREBALL', name: 'Fireball', description: 'Launch a ball of fire dealing 180% Magic damage.', mpCost: 10, cooldown: 2, type: 'ACTIVE'
+    id: 'FIREBALL', name: 'Fireball', description: 'Launch a ball of fire dealing 180% Magic damage. Chance to Burn.', mpCost: 10, cooldown: 2, type: 'ACTIVE',
+    statusEffect: { type: 'BURN', chance: 0.4, duration: 3, value: 5 }
   },
   'SHADOW_STRIKE': {
-    id: 'SHADOW_STRIKE', name: 'Shadow Strike', description: 'A lethal strike with +30% Crit Chance.', mpCost: 8, cooldown: 4, type: 'ACTIVE'
+    id: 'SHADOW_STRIKE', name: 'Shadow Strike', description: 'A lethal strike with +30% Crit Chance. Causes Bleeding.', mpCost: 8, cooldown: 4, type: 'ACTIVE',
+    statusEffect: { type: 'BLEED', chance: 1.0, duration: 3, value: 5 }
   },
   'HOLY_LIGHT': {
     id: 'HOLY_LIGHT', name: 'Holy Light', description: 'Restores HP based on Intelligence.', mpCost: 15, cooldown: 4, type: 'ACTIVE'
@@ -257,12 +265,47 @@ export const ENEMY_TEMPLATES: Partial<Record<TileType, Array<{
 export const DIALOGUE_TREE: Record<string, DialogueNode> = {
   'mayor_intro': {
     id: 'mayor_intro',
-    text: (p, n) => `Welcome to Cavanon, traveler. I am ${n.name}, the Mayor here. You look like you've seen some rough roads.`,
+    text: (p, n) => {
+        if (n.affinity > 70) return `Ah, ${p.name}! The hero of Oakhaven! What can I do for you today?`;
+        if (n.affinity > 30) return `Welcome back, ${p.name}. Things are quiet, thankfully.`;
+        if (p.race === 'Orc' && n.affinity < 20) return `(He eyes your tusks warily) We want no trouble here, Orc. State your business.`;
+        return `Welcome to Cavanon, traveler. I am ${n.name}, the Mayor. You look like you've traveled far.`;
+    },
     options: [
       { text: "Any work available?", nextId: 'mayor_work' },
+      { text: "Tell me about this town's history.", nextId: 'mayor_history', requirement: (p, n) => n.affinity >= 20 },
       { text: "Just passing through.", nextId: 'mayor_neutral' },
-      { text: "[Gift Wildflower] Here, for the town.", requirement: (p) => p.inventory.some(i => i.id === 'GIFT_FLOWER'), nextId: 'mayor_happy', effect: (p, n) => { n.affinity += 10; p.inventory = p.inventory.filter(i => i.id !== 'GIFT_FLOWER'); } }
+      { text: "[Gift Wildflower] A gift for the town.", 
+        requirement: (p) => p.inventory.some(i => i.id === 'GIFT_FLOWER'), 
+        nextId: 'mayor_gift', 
+        effect: (p, n) => { 
+            n.affinity += 15; 
+            const idx = p.inventory.findIndex(i => i.id === 'GIFT_FLOWER');
+            if(idx > -1) {
+                if(p.inventory[idx].quantity && p.inventory[idx].quantity! > 1) p.inventory[idx].quantity!--;
+                else p.inventory.splice(idx, 1);
+            }
+        } 
+      }
     ]
+  },
+  'mayor_gift': {
+      id: 'mayor_gift',
+      text: () => "A wildflower! These grow near the old shrine. It reminds me of my youth. Thank you, traveler.",
+      options: [{ text: "You're welcome.", nextId: 'mayor_intro' }]
+  },
+  'mayor_history': {
+      id: 'mayor_history',
+      text: () => "Oakhaven was built on the ruins of an ancient elven outpost. Some say the cellars beneath the inn still connect to the old tunnels.",
+      options: [
+          { text: "Interesting. Tunnels?", nextId: 'mayor_tunnels' },
+          { text: "Thanks for the lesson.", nextId: 'mayor_intro' }
+      ]
+  },
+  'mayor_tunnels': {
+      id: 'mayor_tunnels',
+      text: () => "Yes, but they are sealed now. Too many rats... and worse things. Best left alone.",
+      options: [{ text: "I'll keep that in mind.", nextId: 'mayor_intro' }]
   },
   'mayor_neutral': {
     id: 'mayor_neutral',
@@ -271,43 +314,97 @@ export const DIALOGUE_TREE: Record<string, DialogueNode> = {
   },
   'mayor_work': {
     id: 'mayor_work',
-    text: () => "There is always work for those willing to bleed. I can assign you a task if you're ready.",
+    text: () => "There is always work for those willing to bleed. Monsters encroach from the forest daily.",
     options: [
       { text: "Give me a quest.", action: 'GENERATE_QUEST', nextId: undefined },
-      { text: "Maybe later.", nextId: undefined }
+      { text: "Maybe later.", nextId: 'mayor_intro' }
     ]
   },
-  'mayor_happy': {
-    id: 'mayor_happy',
-    text: () => "Oh! How thoughtful! You are a friend to Cavanon.",
-    options: [{ text: "Glad you like it.", nextId: undefined }]
-  },
+  
+  // MERCHANT
   'merchant_intro': {
     id: 'merchant_intro',
-    text: (p, n) => n.affinity > 20 ? "Ah, my favorite customer! What can I get you?" : "Coins on the counter. No loitering.",
+    text: (p, n) => {
+        if (n.affinity > 80) return "My dearest friend! Please, look at my private reserve. Discounts for you, of course!";
+        if (n.affinity > 40) return "Good to see a familiar face. Need supplies?";
+        return "Coins on the counter. No loitering.";
+    },
     options: [
-      { text: "Trade.", action: 'OPEN_SHOP', nextId: undefined },
-      { text: "Heard any rumors?", nextId: 'merchant_rumor' }
+      { text: "Show me your wares.", action: 'OPEN_SHOP', nextId: undefined },
+      { text: "Heard any rumors?", nextId: 'merchant_rumor' },
+      { text: "Let's chat for a bit.", nextId: 'merchant_chat', requirement: (p, n) => n.affinity < 50 },
+      { text: "[Gift 50g] Invest in your business.", requirement: (p) => p.gold >= 50, nextId: 'merchant_invest', effect: (p, n) => { p.gold -= 50; n.affinity += 10; } },
+      { text: "Do you have anything... special?", nextId: 'merchant_special', requirement: (p, n) => n.affinity >= 80 }
     ]
+  },
+  'merchant_chat': {
+      id: 'merchant_chat',
+      text: (p, n) => {
+          const topics = ["The weather has been terrible lately.", "Trade routes are dangerous with all these goblins.", "I miss the grand markets of the capital."];
+          return topics[Math.floor(Math.random() * topics.length)];
+      },
+      options: [{ text: "I see.", nextId: 'merchant_intro', effect: (p, n) => { if(Math.random() > 0.5) n.affinity += 2; } }]
+  },
+  'merchant_invest': {
+      id: 'merchant_invest',
+      text: () => "Oh! A silent partner? I assure you, this gold will go towards expanding our inventory. You won't regret this.",
+      options: [{ text: "I expect results.", nextId: 'merchant_intro' }]
+  },
+  'merchant_special': {
+      id: 'merchant_special',
+      text: () => "Shh. Keep your voice down. Since you've been such a loyal patron... take this. It fell off a wagon.",
+      options: [{ 
+          text: "[Take Gift]", 
+          nextId: 'merchant_intro', 
+          effect: (p) => { 
+              const gifts = [ITEMS['POTION_MAX'], ITEMS['MAGIC_DUST'], ITEMS['STEAK']];
+              const gift = gifts[Math.floor(Math.random() * gifts.length)];
+              p.inventory = addToInventory(p.inventory, gift, 1);
+          } 
+      }]
   },
   'merchant_rumor': {
     id: 'merchant_rumor',
-    text: () => "They say the fog in the east makes people forget their own names...",
-    options: [{ text: "Creepy.", nextId: undefined }]
+    text: () => "They say the fog in the east makes people forget their own names... and I heard the Blacksmith in the city is looking for rare ores.",
+    options: [{ text: "Good to know.", nextId: 'merchant_intro' }]
   },
+
+  // GUARD
   'guard_intro': {
     id: 'guard_intro',
-    text: (p, n) => p.reputation < 0 ? "Watch it, scum. I've got my eye on you." : "Move along, citizen.",
+    text: (p, n) => {
+        if (p.race === 'Orc') return "Kin. Keep your blade sharp. The humans are skittish today.";
+        if (p.reputation < -10) return "One wrong move, scum, and you're in irons.";
+        if (n.affinity > 20) return "Stay safe out there, citizen.";
+        return "Move along. No trouble.";
+    },
     options: [
-      { text: "Just leaving.", nextId: undefined },
-      { text: "[Bribe 10g] Look the other way.", requirement: (p) => p.gold >= 10, nextId: 'guard_bribe', effect: (p, n) => { p.gold -= 10; n.affinity += 5; } }
+      { text: "Just passing through.", nextId: undefined },
+      { text: "Report a crime.", nextId: 'guard_crime' },
+      { text: "Lok'tar. (Orc Greeting)", requirement: (p) => p.race === 'Orc', nextId: 'guard_orc', effect: (p, n) => { n.affinity += 5; } },
+      { text: "[Bribe 20g] Look the other way.", requirement: (p) => p.gold >= 20, nextId: 'guard_bribe', effect: (p, n) => { 
+          p.gold -= 20; 
+          if(Math.random() > 0.5) n.affinity += 5; 
+          else { n.affinity -= 5; p.reputation -= 5; }
+      }}
     ]
+  },
+  'guard_orc': {
+      id: 'guard_orc',
+      text: () => "Strength and honor. If you find any good fights, save some for me.",
+      options: [{ text: "I will.", nextId: 'guard_intro' }]
+  },
+  'guard_crime': {
+      id: 'guard_crime',
+      text: () => "Unless you have proof or a body, I don't want to hear it. Too much paperwork.",
+      options: [{ text: "Nevermind.", nextId: 'guard_intro' }]
   },
   'guard_bribe': {
     id: 'guard_bribe',
-    text: () => "*Coughs and pockets the coin* I didn't see anything.",
-    options: [{ text: "Good.", nextId: undefined }]
+    text: (p, n) => n.affinity >= 25 ? "*Coughs and pockets the coin* I saw nothing. Go." : "Are you trying to bribe an officer? Get out of my sight before I arrest you!",
+    options: [{ text: "Leaving.", nextId: undefined }]
   },
+
   // Specialized Shop Dialogues
   'blacksmith_intro': {
       id: 'blacksmith_intro',
@@ -318,6 +415,11 @@ export const DIALOGUE_TREE: Record<string, DialogueNode> = {
       id: 'armorer_intro',
       text: () => "Don't go out there without protection. My armor has saved many lives.",
       options: [{ text: "I need armor.", action: 'OPEN_SHOP', nextId: undefined }, { text: "Leaving.", nextId: undefined }]
+  },
+  'weaponsmith_intro': {
+      id: 'weaponsmith_intro',
+      text: () => "Sharpest steel in the city. If you want to kill it, I have the tool.",
+      options: [{ text: "Show me your weapons.", action: 'OPEN_SHOP', nextId: undefined }, { text: "Just looking.", nextId: undefined }]
   },
   'alchemist_intro': {
       id: 'alchemist_intro',
@@ -343,397 +445,40 @@ export const DIALOGUE_TREE: Record<string, DialogueNode> = {
 
 export const NPC_TEMPLATES: NPC[] = [
   {
-    id: 'npc_mayor',
-    name: 'Mayor Eldrin',
-    role: 'Mayor',
-    race: 'Human',
-    affinity: 50,
-    description: 'An elderly man with a weary but kind face.',
-    inventory: [],
-    dialogueRoot: 'mayor_intro',
-    memory: [],
-    mapId: 'starter_village',
-    schedule: {
-      [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'watching the sunrise' },
-      [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'managing town affairs' },
-      [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'lighting the lamps' },
-      [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'sleeping' },
-    },
-    isQuestGiver: true
+    id: 'npc_mayor', name: 'Mayor Arin', role: 'Mayor', race: 'Human', affinity: 20, description: 'The elected official of Oakhaven.', inventory: [], dialogueRoot: 'mayor_intro', memory: [], mapId: 'starter_village',
+    schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Waking up' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Working at Hall' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Evening stroll' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
   },
   {
-    id: 'npc_merchant',
-    name: 'Sila the Trader',
-    role: 'General Merchant',
-    race: 'Elf',
-    affinity: 40,
-    description: 'A sharp-eyed elf surrounded by wares.',
-    inventory: [
-        ITEMS['POTION_HP'], 
-        ITEMS['BREAD'], 
-        ITEMS['GIFT_FLOWER'], 
-        ITEMS['HELMET_LEATHER'], 
-        ITEMS['SWORD_IRON'], 
-        ITEMS['SHIELD_WOOD']
-    ],
-    dialogueRoot: 'merchant_intro',
-    memory: [],
-    mapId: 'starter_village',
-    schedule: {
-      [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'setting up her stall' },
-      [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'selling goods' },
-      [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'packing up' },
-      [TimeOfDay.NIGHT]: { tileType: TileType.GRASS, description: 'camping nearby' }, 
-    },
-    isMerchant: true
+    id: 'npc_merchant', name: 'Garret', role: 'Merchant', race: 'Human', affinity: 10, description: 'A local trader.', inventory: [], dialogueRoot: 'merchant_intro', memory: [], mapId: 'starter_village', isMerchant: true,
+    schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Opening Shop' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Trading' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Counting Coin' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
   },
   {
-    id: 'npc_guard',
-    name: 'Sergeant Kael',
-    role: 'Guard',
-    race: 'Orc',
-    affinity: 30,
-    description: 'A hulking orc in rusted chainmail.',
-    inventory: [],
-    dialogueRoot: 'guard_intro',
-    memory: [],
-    mapId: 'starter_village',
-    schedule: {
-      [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'patrolling the gates' },
-      [TimeOfDay.DAY]: { tileType: TileType.FOREST, description: 'patrolling the woods' },
-      [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'returning from patrol' },
-      [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'guarding the inn' },
-    }
-  },
-  // NEW CITY NPCs
-  {
-    id: 'npc_blacksmith',
-    name: 'Grom the Hammer',
-    role: 'Weapon Smith',
-    race: 'Dwarf',
-    affinity: 40,
-    description: 'A soot-covered dwarf pounding red-hot steel.',
-    inventory: [], // Will be filled procedurally
-    dialogueRoot: 'blacksmith_intro',
-    memory: [],
-    mapId: 'capital_city',
-    schedule: {
-        [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'stoking the forge' },
-        [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'forging weapons' },
-        [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'sharpening blades' },
-        [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'sleeping' },
-    },
-    isMerchant: true
+    id: 'npc_guard', name: 'Sgt. Pike', role: 'Guard', race: 'Human', affinity: 0, description: 'Village guard.', inventory: [], dialogueRoot: 'guard_intro', memory: [], mapId: 'starter_village',
+    schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Patrol' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Gate Duty' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Patrol' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Off duty' } }
   },
   {
-    id: 'npc_armorer',
-    name: 'Thalia Ironheart',
-    role: 'Armor Smith',
-    race: 'Human',
-    affinity: 40,
-    description: 'A stern woman inspecting a breastplate.',
-    inventory: [], // Will be filled procedurally
-    dialogueRoot: 'armorer_intro',
-    memory: [],
-    mapId: 'capital_city',
-    schedule: {
-        [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'opening shop' },
-        [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'polishing armor' },
-        [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'taking inventory' },
-        [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'sleeping' },
-    },
-    isMerchant: true
+      id: 'npc_blacksmith', name: 'Korg', role: 'Blacksmith', race: 'Orc', affinity: 10, description: 'A master smith.', inventory: [], dialogueRoot: 'blacksmith_intro', memory: [], mapId: 'starter_village', isMerchant: true,
+      schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Firing forge' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Smithing' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Cooling down' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
+  },
+  // City NPCs
+  {
+      id: 'npc_city_armorer', name: 'Gareth', role: 'Armorer', race: 'Human', affinity: 10, description: 'Sells heavy plate and shields.', inventory: [], dialogueRoot: 'armorer_intro', memory: [], mapId: 'capital_city', isMerchant: true,
+      schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Polishing armor' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Selling wares' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Closing up' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
   },
   {
-    id: 'npc_alchemist',
-    name: 'Lysara of the Mist',
-    role: 'Potion Alchemist',
-    race: 'Elf',
-    affinity: 40,
-    description: 'An ethereal elf surrounded by strange fumes.',
-    inventory: [ITEMS['POTION_HP'], ITEMS['POTION_MAX'], ITEMS['MAGIC_DUST']],
-    dialogueRoot: 'alchemist_intro',
-    memory: [],
-    mapId: 'capital_city',
-    schedule: {
-        [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'gathering herbs' },
-        [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'brewing potions' },
-        [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'bottling elixirs' },
-        [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'meditating' },
-    },
-    isMerchant: true
+    id: 'npc_city_weaponsmith', name: 'Thane', role: 'Weaponsmith', race: 'Dwarf', affinity: 10, description: 'Surrounded by swords and axes.', inventory: [], dialogueRoot: 'weaponsmith_intro', memory: [], mapId: 'capital_city', isMerchant: true,
+    schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Sharpening' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Selling weapons' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Cleaning' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
   },
   {
-    id: 'npc_baker',
-    name: 'Barnaby Bun',
-    role: 'Food Merchant',
-    race: 'Halfling',
-    affinity: 60,
-    description: 'A cheerful halfling covered in flour.',
-    inventory: [ITEMS['BREAD'], ITEMS['CHEESE'], ITEMS['STEAK']],
-    dialogueRoot: 'baker_intro',
-    memory: [],
-    mapId: 'capital_city',
-    schedule: {
-        [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'baking bread' },
-        [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'selling pastries' },
-        [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'cleaning ovens' },
-        [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'sleeping' },
-    },
-    isMerchant: true
+      id: 'npc_city_alchemist', name: 'Elara', role: 'Alchemist', race: 'Elf', affinity: 10, description: 'brews strange potions.', inventory: [], dialogueRoot: 'alchemist_intro', memory: [], mapId: 'capital_city', isMerchant: true,
+      schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Gathering herbs' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Brewing' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Researching' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Trance' } }
   },
   {
-    id: 'npc_innkeeper_city',
-    name: 'Olin Keeper',
-    role: 'Innkeeper',
-    race: 'Human',
-    affinity: 50,
-    description: 'A welcoming man with a clean apron.',
-    inventory: [],
-    dialogueRoot: 'innkeeper_city_intro',
-    memory: [],
-    mapId: 'capital_city',
-    schedule: {
-        [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'cleaning rooms' },
-        [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'managing the inn' },
-        [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'serving guests' },
-        [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'checking logs' },
-    }
+      id: 'npc_city_baker', name: 'Pip', role: 'Baker', race: 'Halfling', affinity: 20, description: 'Smells of yeast and sugar.', inventory: [], dialogueRoot: 'baker_intro', memory: [], mapId: 'capital_city', isMerchant: true,
+      schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Baking bread' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Selling pies' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Cleaning flour' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Sleeping' } }
+  },
+  {
+      id: 'npc_city_innkeeper', name: 'Bess', role: 'Innkeeper', race: 'Human', affinity: 15, description: 'Runs the Gilded Rest.', inventory: [], dialogueRoot: 'innkeeper_city_intro', memory: [], mapId: 'capital_city',
+      schedule: { [TimeOfDay.DAWN]: { tileType: TileType.TOWN, description: 'Preparing breakfast' }, [TimeOfDay.DAY]: { tileType: TileType.TOWN, description: 'Cleaning rooms' }, [TimeOfDay.DUSK]: { tileType: TileType.TOWN, description: 'Serving drinks' }, [TimeOfDay.NIGHT]: { tileType: TileType.TOWN, description: 'Working late' } }
   }
 ];
-
-// --- Map Generators ---
-
-export const generatePlayerHome = (): GameMap => {
-    const size = 10;
-    const map: Tile[][] = [];
-    
-    for (let y = 0; y < size; y++) {
-        const row: Tile[] = [];
-        for (let x = 0; x < size; x++) {
-            // Create walls around the edges
-            let type = (x === 0 || x === size - 1 || y === 0 || y === size - 1) ? TileType.WALL : TileType.FLOOR;
-            const tile: Tile = { x, y, type, explored: true, npcs: [] }; // Home is always explored
-            row.push(tile);
-        }
-        map.push(row);
-    }
-
-    // Add Exit
-    map[size-1][Math.floor(size/2)].type = TileType.PORTAL;
-    map[size-1][Math.floor(size/2)].portalTarget = {
-        mapId: 'starter_village',
-        x: 10,
-        y: 10,
-        desc: "Leave Home"
-    };
-
-    // Add Bed
-    map[2][2].interactable = { type: InteractableType.BED };
-    
-    // Add Storage Chest
-    map[2][size-3].interactable = { type: InteractableType.STORAGE };
-
-    return { id: 'player_home', name: "Player's Home", width: size, height: size, tiles: map };
-};
-
-export const generateVillage = (): GameMap => {
-  const size = 15;
-  const map: Tile[][] = [];
-  const centerX = Math.floor(size / 2); // 7
-  const centerY = Math.floor(size / 2); // 7
-  
-  for (let y = 0; y < size; y++) {
-    const row: Tile[] = [];
-    for (let x = 0; x < size; x++) {
-      let type = TileType.GRASS;
-      
-      const dx = x - size/2;
-      const dy = y - size/2;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-
-      if (dist < 4) type = TileType.TOWN;
-      else if (dist > 6) type = TileType.FOREST;
-      
-      if (Math.abs(dx) < 1 || Math.abs(dy) < 1) type = TileType.TOWN;
-
-      // Force all tiles explored
-      row.push({ x, y, type, explored: true, npcs: [] });
-    }
-    map.push(row);
-  }
-
-  // --- Place NPCs specifically ---
-  // Mayor in the Center
-  if (map[centerY][centerX]) map[centerY][centerX].npcs.push('npc_mayor');
-  
-  // Trader to the West (Market Stall)
-  if (map[centerY][centerX - 2]) map[centerY][centerX - 2].npcs.push('npc_merchant');
-
-  // Guard to the East (Gate)
-  if (map[centerY][centerX + 2]) map[centerY][centerX + 2].npcs.push('npc_guard');
-
-
-  // Player Home Entrance
-  map[10][10].type = TileType.PORTAL;
-  map[10][10].portalTarget = {
-      mapId: 'player_home',
-      x: 5,
-      y: 8,
-      desc: "Enter Home"
-  };
-
-  // Portal to World Map
-  const exitY = Math.floor(size / 2);
-  const exitX = size - 1;
-  map[exitY][exitX].type = TileType.PORTAL;
-  map[exitY][exitX].portalTarget = {
-    mapId: 'world_map',
-    x: 31, // Corrected to be East of Village (30,50)
-    y: 50,
-    desc: "Enter the Wilderness"
-  };
-
-  return { id: 'starter_village', name: 'Oakhaven Village', width: size, height: size, tiles: map };
-};
-
-export const generateCity = (): GameMap => {
-    const size = 25;
-    const map: Tile[][] = [];
-    const cx = Math.floor(size/2);
-    const cy = Math.floor(size/2);
-    
-    for (let y = 0; y < size; y++) {
-      const row: Tile[] = [];
-      for (let x = 0; x < size; x++) {
-        // Basic Terrain: Stone/Town
-        let type = TileType.TOWN;
-        
-        // Walls
-        if (x === 0 || x === size - 1 || y === 0 || y === size - 1) type = TileType.WALL;
-        
-        // Paved Roads
-        if (x === cx || y === cy) type = TileType.FLOOR;
-  
-        // Central Plaza
-        if (Math.abs(x - cx) < 3 && Math.abs(y - cy) < 3) type = TileType.FLOOR;
-  
-        row.push({ x, y, type, explored: true, npcs: [] });
-      }
-      map.push(row);
-    }
-  
-    // --- Place NPCs specifically in the Plaza Corners ---
-    // Blacksmith (Top Left of Plaza)
-    map[cy - 2][cx - 2].npcs.push('npc_blacksmith');
-    
-    // Armorer (Top Right of Plaza)
-    map[cy - 2][cx + 2].npcs.push('npc_armorer');
-
-    // Alchemist (Bottom Left of Plaza)
-    map[cy + 2][cx - 2].npcs.push('npc_alchemist');
-
-    // Baker (Bottom Right of Plaza)
-    map[cy + 2][cx + 2].npcs.push('npc_baker');
-
-    // Innkeeper (North of Plaza)
-    map[cy - 3][cx].npcs.push('npc_innkeeper_city');
-
-
-    // Portal to World Map
-    const exitX = Math.floor(size / 2);
-    const exitY = size - 2;
-    map[exitY][exitX].type = TileType.PORTAL;
-    map[exitY][exitX].portalTarget = {
-      mapId: 'world_map',
-      x: 50, 
-      y: 26, // Corrected to be South of City (50,25)
-      desc: "Leave City"
-    };
-
-    return { id: 'capital_city', name: 'High King\'s City', width: size, height: size, tiles: map };
-};
-
-export const generateWorldMap = (): GameMap => {
-  const size = 100;
-  const map: Tile[][] = [];
-  const centerX = size / 2;
-  const centerY = size / 2;
-
-  // Generate continent using simple polar coordinate noise logic for distinct regions
-  for (let y = 0; y < size; y++) {
-    const row: Tile[] = [];
-    for (let x = 0; x < size; x++) {
-      const dx = x - centerX;
-      const dy = y - centerY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      // Determine direction relative to center
-      const angle = Math.atan2(dy, dx); 
-
-      // Start with Water
-      let type = TileType.WATER;
-      
-      // Irregular continent shape radius
-      const r = (size/2 - 8) + Math.sin(angle * 7) * 4 + Math.cos(angle * 3) * 6;
-      
-      if (dist < r) {
-        // We are inside the continent
-        // Use coordinates to determine biomes
-        
-        // North (Top): Mountains
-        if (y < size * 0.35) {
-            type = Math.random() > 0.3 ? TileType.MOUNTAIN : TileType.GRASS;
-            // Peaks
-            if (y < size * 0.15 && Math.random() > 0.5) type = TileType.MOUNTAIN; 
-        } 
-        // East (Right): Ruins / Wasteland
-        else if (x > size * 0.7) {
-            type = Math.random() > 0.4 ? TileType.RUINS : TileType.GRASS;
-        }
-        // South (Bottom): Forest / Swamp
-        else if (y > size * 0.65) {
-            type = Math.random() > 0.2 ? TileType.FOREST : TileType.GRASS;
-        }
-        // West (Left): Plains / Grassland
-        else {
-            type = TileType.GRASS;
-            if (Math.random() > 0.9) type = TileType.FOREST;
-        }
-      }
-      
-      // Set explored to true to make the map fully visible from the start
-      row.push({ x, y, type, explored: true, npcs: [] });
-    }
-    map.push(row);
-  }
-
-  // Place Villages/Cities
-
-  // Starter Village (West-ish)
-  const vX = Math.floor(centerX - 20); // 30
-  const vY = Math.floor(centerY); // 50
-  if (map[vY] && map[vY][vX]) {
-       map[vY][vX].type = TileType.PORTAL;
-       map[vY][vX].portalTarget = {
-           mapId: 'starter_village',
-           x: 7,
-           y: 7,
-           desc: 'Enter Oakhaven'
-       };
-  }
-
-  // Capital City (North)
-  const cX = Math.floor(centerX); // 50
-  const cY = Math.floor(centerY - 25); // 25
-   if (map[cY] && map[cY][cX]) {
-       map[cY][cX].type = TileType.PORTAL;
-       map[cY][cX].portalTarget = {
-           mapId: 'capital_city',
-           x: 12,
-           y: 23,
-           desc: 'Enter Capital'
-       };
-  }
-
-  return { id: 'world_map', name: 'World Map', width: size, height: size, tiles: map };
-};

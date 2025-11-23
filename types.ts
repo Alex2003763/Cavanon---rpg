@@ -105,6 +105,13 @@ export interface DerivedStats {
   mpRegen: number;
 }
 
+export type ItemEffectType = 'LIFESTEAL' | 'MANA_STEAL' | 'CRIT_DMG' | 'THORNS' | 'STUN_CHANCE' | 'BLEED_CHANCE';
+
+export interface ItemEffect {
+    type: ItemEffectType;
+    value: number; // e.g. 0.1 for 10%
+}
+
 export interface Item {
   id: string;
   name: string;
@@ -118,6 +125,17 @@ export interface Item {
   rarity?: ItemRarity;
   material?: ItemMaterial;
   quantity?: number; // Stacking support
+  effects?: ItemEffect[]; // Special combat effects
+}
+
+export type StatusEffectType = 'POISON' | 'STUN' | 'REGEN' | 'BUFF_STR' | 'BUFF_DEF' | 'BLEED' | 'BURN' | 'FREEZE';
+
+export interface StatusEffect {
+  id: string;
+  type: StatusEffectType;
+  duration: number; // Turns
+  value?: number; // Intensity
+  name: string;
 }
 
 export interface Skill {
@@ -128,6 +146,12 @@ export interface Skill {
   cooldown: number;
   type: 'ACTIVE' | 'PASSIVE';
   effect?: (user: Player, target: Enemy, stats: Stats, derived: DerivedStats) => { damage?: number, heal?: number, log: string };
+  statusEffect?: { // Helper for auto-resolver
+      type: StatusEffectType;
+      chance: number; // 0-1
+      duration: number;
+      value: number;
+  };
 }
 
 export interface RaceData {
@@ -171,16 +195,6 @@ export interface Quest {
     goldReward: number;
     itemReward?: string;
     status: QuestStatus;
-}
-
-export type StatusEffectType = 'POISON' | 'STUN' | 'REGEN' | 'BUFF_STR' | 'BUFF_DEF' | 'BLEED' | 'BURN' | 'FREEZE';
-
-export interface StatusEffect {
-  id: string;
-  type: StatusEffectType;
-  duration: number; // Turns
-  value?: number; // Intensity
-  name: string;
 }
 
 export interface Player {
@@ -335,6 +349,7 @@ export type Action =
   | { type: 'START_GAME'; payload: Partial<Player> }
   | { type: 'SAVE_GAME'; payload: number }
   | { type: 'LOAD_GAME'; payload: number }
+  | { type: 'IMPORT_SAVE'; payload: GameState }
   | { type: 'SET_MODE'; payload: GameMode }
   | { type: 'PLAYER_STEP'; payload: { x: number; y: number } }
   | { type: 'SWITCH_MAP'; payload: { mapId: string; x: number; y: number } }
